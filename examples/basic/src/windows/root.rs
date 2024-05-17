@@ -1,5 +1,7 @@
 //! Code for the root window of the project.
 
+use std::time::Duration;
+
 use crate::egui_multiwin_dynamic::{
     multi_window::NewWindowRequest,
     tracked_window::{RedrawResponse, TrackedWindow},
@@ -36,7 +38,7 @@ impl RootWindow {
                 prev_time: std::time::Instant::now(),
                 fps: None,
             }),
-            egui_multiwin::winit::window::WindowBuilder::new()
+            egui_multiwin::async_winit::window::WindowBuilder::new()
                 .with_resizable(true)
                 .with_inner_size(egui_multiwin::winit::dpi::LogicalSize {
                     width: 800.0,
@@ -68,8 +70,7 @@ impl TrackedWindow for RootWindow {
     ) -> RedrawResponse {
         let mut quit = false;
 
-        egui.egui_ctx.request_repaint();
-        egui.egui_ctx.set_embed_viewports(false);
+        egui.egui_ctx.request_repaint_after(Duration::from_millis(9500));
 
         let cur_time = std::time::Instant::now();
         let delta = cur_time.duration_since(self.prev_time);

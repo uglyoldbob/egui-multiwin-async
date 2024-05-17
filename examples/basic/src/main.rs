@@ -9,12 +9,10 @@ use egui_multiwin_dynamic::multi_window::{MultiWindow, NewWindowRequest};
 pub mod egui_multiwin_dynamic {
     egui_multiwin::tracked_window!(
         crate::AppCommon,
-        egui_multiwin::NoEvent,
         crate::windows::MyWindows
     );
     egui_multiwin::multi_window!(
         crate::AppCommon,
-        egui_multiwin::NoEvent,
         crate::windows::MyWindows
     );
 }
@@ -42,9 +40,9 @@ impl AppCommon {
     }
 }
 
-fn main() {
-    let mut event_loop = egui_multiwin::winit::event_loop::EventLoopBuilder::with_user_event();
-    let event_loop = event_loop.build().unwrap();
+#[tokio::main]
+async fn main() {
+    let event_loop = egui_multiwin::async_winit::event_loop::EventLoop::new();
     let mut multi_window: MultiWindow = MultiWindow::new();
     multi_window.add_font(
         "computermodern".to_string(),
@@ -55,7 +53,9 @@ fn main() {
 
     let mut ac = AppCommon { clicks: 0 };
 
-    let _e = multi_window.add(root_window, &mut ac, &event_loop);
-    let _e = multi_window.add(root_window2, &mut ac, &event_loop);
+    let window_target = event_loop.window_target();
+
+    let _e = multi_window.add(root_window, &mut ac, window_target).await;
+    let _e = multi_window.add(root_window2, &mut ac, window_target).await;
     multi_window.run(event_loop, ac).unwrap();
 }

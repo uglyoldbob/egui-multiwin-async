@@ -33,13 +33,14 @@
 use winit::window::WindowId;
 
 pub use {
-    arboard, egui, egui_glow, enum_dispatch, glutin, raw_window_handle, raw_window_handle_5,
+    arboard, async_winit, egui, egui_glow, enum_dispatch, glutin, raw_window_handle, raw_window_handle_5,
     thiserror, winit,
 };
 pub mod multi_window;
 pub mod tracked_window;
 
 /// A generic non-event providing struct that users can use when they don't need custom events.
+#[derive(Debug)]
 pub struct NoEvent {}
 
 impl NoEvent {

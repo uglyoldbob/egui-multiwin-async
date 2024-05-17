@@ -21,7 +21,7 @@ impl PopupWindow {
             super::MyWindows::Popup(PopupWindow {
                 input: label.clone(),
             }),
-            egui_multiwin::winit::window::WindowBuilder::new()
+            egui_multiwin::async_winit::window::WindowBuilder::new()
                 .with_resizable(false)
                 .with_inner_size(egui_multiwin::winit::dpi::LogicalSize {
                     width: 400.0,

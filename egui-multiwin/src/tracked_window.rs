@@ -15,7 +15,7 @@ pub struct ContextHolder<T> {
     /// The context being held
     context: T,
     /// The window
-    pub window: winit::window::Window,
+    pub window: async_winit::window::Window<async_winit::ThreadUnsafe>,
     /// The window surface
     ws: glutin::surface::Surface<WindowSurface>,
     /// The display
@@ -28,7 +28,7 @@ impl<T> ContextHolder<T> {
     /// Create a new context holder
     pub fn new(
         context: T,
-        window: winit::window::Window,
+        window: async_winit::window::Window<async_winit::ThreadUnsafe>,
         ws: glutin::surface::Surface<WindowSurface>,
         display: glutin::display::Display,
         options: TrackedWindowOptions,
@@ -45,7 +45,7 @@ impl<T> ContextHolder<T> {
 impl<T> ContextHolder<T> {
     /// Get the window handle
     pub fn window(&self) -> &winit::window::Window {
-        &self.window
+        self.window.window()
     }
 }
 

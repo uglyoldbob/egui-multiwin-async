@@ -22,7 +22,7 @@ impl PopupWindow {
             super::MyWindows::Transparent(PopupWindow {
                 input: label.clone(),
             }),
-            egui_multiwin::winit::window::WindowBuilder::new()
+            egui_multiwin::async_winit::window::WindowBuilder::new()
                 .with_resizable(false)
                 .with_transparent(true)
                 .with_inner_size(egui_multiwin::winit::dpi::LogicalSize {
