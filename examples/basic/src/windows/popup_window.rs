@@ -120,10 +120,13 @@ impl TrackedWindow for PopupWindow {
     ) -> RedrawResponse {
         let mut quit = false;
 
-        egui_multiwin::egui::CentralPanel::default().show(&egui.egui_ctx, |ui| {
+        egui_multiwin::egui::CentralPanel::default().show_async(&egui.egui_ctx, |ui| async move {
+            use std::ops::DerefMut;
+            let mut uil = ui.lock().unwrap();
+            let ui = uil.deref_mut();
             if ui.button("Increment").clicked() {
                 c.clicks += 1;
-                window.set_title(&format!("Title update {}", c.clicks));
+                window.set_title(&format!("Title update {}", c.clicks)).await;
             }
             let response = ui.add(egui_multiwin::egui::TextEdit::singleline(&mut self.input));
             if response.changed() {
@@ -136,7 +139,7 @@ impl TrackedWindow for PopupWindow {
             if ui.button("Quit").clicked() {
                 quit = true;
             }
-        });
+        }).await;
         RedrawResponse {
             quit,
             new_windows: Vec::new(),

@@ -111,7 +111,7 @@ checksum = "175571dd1d178ced59193a6fc02dde1b972eb0bc56c892cde9beeceac5bf0f6b"
 [[package]]
 name = "async-winit"
 version = "0.2.1"
-source = "git+https://github.com/uglyoldbob/async-winit.git#a2958a8bd0ef5c1c1092ca56442f1704ae8a49d1"
+source = "git+https://github.com/uglyoldbob/async-winit.git#8b987878702e4312d291b3d03b602ebabcbe0ae5"
 dependencies = [
  "cfg-if",
  "cfg_aliases",

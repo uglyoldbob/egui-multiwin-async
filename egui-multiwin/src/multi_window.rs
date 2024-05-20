@@ -484,6 +484,7 @@ macro_rules! tracked_window {
                             }
                         }
                     }
+                    println!("Unable to create a window");
                     panic!("No window created");
                 }
 
@@ -874,64 +875,16 @@ macro_rules! multi_window {
                     mut self,
                     mut c: $common,
                 ) -> Result<(), EventLoopError> {
-                    self.event_loop.block_on(async {
-                        todo!();
-                    })
-                    /*
-                    move |event, event_loop_window_target| {
-                        let c = &mut c;
-                        println!("handling event {:?}", event);
-                        if let winit::event::Event::NewEvents(e) = &event {
-                            println!("New events {:?}", e);
-                        }
-                        let window_control_flow = self.do_window_events(c, &event, event_loop_window_target);
-
-                        let mut flow = Some(event_loop_window_target.control_flow());
-
-                        // If any window requested polling, we should poll.
-                        // Precedence: Poll > WaitUntil(smallest) > Wait.
-                        if flow.is_none() {
-                        } else if let Some(flow) = &mut flow {
-                            *flow = ControlFlow::Wait;
-                            for flow_request in window_control_flow {
-                                if let Some(flow_request) = flow_request {
-                                    match flow_request {
-                                        ControlFlow::Poll => {
-                                            *flow = ControlFlow::Poll;
-                                        }
-                                        ControlFlow::Wait => (), // do nothing, if untouched it will be wait
-                                        ControlFlow::WaitUntil(when_new) => {
-                                            if let ControlFlow::Poll = *flow {
-                                                continue; // Polling takes precedence, so ignore this.
-                                            }
-
-                                            // The current flow is already WaitUntil. If this one is sooner, use it instead.
-                                            if let ControlFlow::WaitUntil(when_current) = *flow {
-                                                if when_new < when_current {
-                                                    *flow = ControlFlow::WaitUntil(when_new);
-                                                }
-                                            } else {
-                                                // The current flow is lower precedence, so replace it with this.
-                                                *flow = ControlFlow::WaitUntil(when_new);
-                                            }
-                                        }
-                                    }
-                                }
+                    let event_loop_window_target = self.event_loop.window_target().clone();
+                    println!("Stuff 1");
+                    self.event_loop.block_on(
+                        async move {
+                            println!("App startup");
+                            loop {
+                                event_loop_window_target.resumed().await;
+                                println!("Unknown status, looping infinitely");
                             }
-                        }
-
-                        if self.windows.is_empty() {
-                            //println!("no more windows running, exiting event loop.");
-                            flow = None;
-                        }
-
-                        if let Some(flow) = flow {
-                            event_loop_window_target.set_control_flow(flow);
-                        } else {
-                            event_loop_window_target.exit();
-                        }
-                    })
-                    */
+                        })
                 }
             }
 

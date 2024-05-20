@@ -35,17 +35,26 @@ pub struct AppCommon {
 
 #[tokio::main]
 async fn main() {
+    println!("Startup 1");
     let mut multi_window: MultiWindow<egui_multiwin::async_winit::DefaultThreadSafety> = MultiWindow::new();
+    println!("Startup 2");
     multi_window.add_font(
         "computermodern".to_string(),
         egui_multiwin::egui::FontData::from_static(COMPUTER_MODERN_FONT),
     );
+    println!("Startup 3");
     let root_window = root::RootWindow::request();
+    println!("Startup 4");
     let root_window2 = popup_window::PopupWindow::request("initial popup".to_string());
+    println!("Startup 5");
 
     let ac = AppCommon { clicks: 0 };
+    println!("Startup 6");
 
     let _e = multi_window.add(root_window).await;
+    println!("Startup 7");
     let _e = multi_window.add(root_window2).await;
+    println!("Startup 8");
     multi_window.run(ac).unwrap();
+    println!("Startup 9");
 }
