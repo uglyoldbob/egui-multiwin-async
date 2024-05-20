@@ -1,39 +1,5 @@
 //! This defines the MultiWindow struct. This is the main struct used in the main function of a user application.
 
-use std::{collections::HashMap, sync::Mutex};
-
-use winit::window::WindowId;
-
-lazy_static::lazy_static! {
-    static ref WINDOW_REQUEST_ID: Mutex<u32> = Mutex::new(0u32);
-    /// The table that is used to obtain window ids
-    pub static ref WINDOW_TABLE: Mutex<HashMap<u32, Option<WindowId>>> = Mutex::new(HashMap::new());
-}
-
-/// Creates a new id for a window request that the user program can do things with
-pub fn new_id() -> u32 {
-    let mut l = WINDOW_REQUEST_ID.lock().unwrap();
-    let mut table = WINDOW_TABLE.lock().unwrap();
-    loop {
-        *l = l.wrapping_add(1);
-        if !table.contains_key(&l) {
-            table.insert(*l, None);
-            break;
-        }
-    }
-    *l
-}
-
-/// Retrieve a window id
-pub fn get_window_id(id: u32) -> Option<WindowId> {
-    let table = WINDOW_TABLE.lock().unwrap();
-    if let Some(id) = table.get(&id) {
-        *id
-    } else {
-        None
-    }
-}
-
 /// Create the dynamic tracked_window module for a egui_multiwin application. Takes three arguments. First argument is the type name of the common data structure for your application.
 /// Second argument is the type for custom events (or egui_multiwin::NoEvent if that functionality is not desired). Third argument is the enum of all windows. It needs to be enum_dispatch.
 #[macro_export]
@@ -49,20 +15,19 @@ macro_rules! tracked_window {
 
             use egui_multiwin::egui;
             use egui::viewport::{DeferredViewportUiCallback, ViewportBuilder, ViewportId, ViewportIdSet};
-            use egui_multiwin::egui_glow::EguiGlow;
-            use egui_multiwin::egui_glow::{self, glow};
+            use egui_multiwin::egui_glow_async::EguiGlow;
+            use egui_multiwin::egui_glow_async::{self, glow};
             use egui_multiwin::glutin::context::{NotCurrentContext, PossiblyCurrentContext};
             use egui_multiwin::glutin::prelude::{GlConfig, GlDisplay};
             use egui_multiwin::glutin::surface::SurfaceAttributesBuilder;
             use egui_multiwin::glutin::surface::WindowSurface;
             use egui_multiwin::raw_window_handle_5::{HasRawDisplayHandle, HasRawWindowHandle};
             use egui_multiwin::tracked_window::{ContextHolder, TrackedWindowOptions};
-            use egui_multiwin::winit::window::WindowId;
             use egui_multiwin::async_winit::{
                 event::Event,
                 event_loop::{ControlFlow, EventLoopWindowTarget},
             };
-            use egui_multiwin::{arboard, glutin, winit};
+            use egui_multiwin::{arboard, glutin, async_winit};
 
             use $window;
 
@@ -102,11 +67,11 @@ macro_rules! tracked_window {
                 fn set_root(&mut self, _root: bool) {}
 
                 /// Runs the redraw for the window. See RedrawResponse for the return value.
-                fn redraw(
+                async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
                     &mut self,
                     c: &mut $common,
                     egui: &mut EguiGlow,
-                    window: &egui_multiwin::winit::window::Window,
+                    window: &egui_multiwin::async_winit::window::Window<TS>,
                     clipboard: &mut egui_multiwin::arboard::Clipboard,
                 ) -> RedrawResponse;
                 /// Allows opengl rendering to be done underneath all of the egui stuff of the window
@@ -116,7 +81,7 @@ macro_rules! tracked_window {
                 unsafe fn opengl_before(
                     &mut self,
                     _c: &mut $common,
-                    _gl: &Arc<egui_multiwin::egui_glow::painter::Context>,
+                    _gl: &Arc<egui_multiwin::egui_glow_async::painter::Context>,
                 ) {
                 }
                 /// Allows opengl rendering to be done on top of all of the egui stuff of the window
@@ -126,7 +91,7 @@ macro_rules! tracked_window {
                 unsafe fn opengl_after(
                     &mut self,
                     _c: &mut $common,
-                    _gl: &Arc<egui_multiwin::egui_glow::painter::Context>,
+                    _gl: &Arc<egui_multiwin::egui_glow_async::painter::Context>,
                 ) {
                 }
             }
@@ -175,14 +140,15 @@ macro_rules! tracked_window {
                 /// Handles one event from the event loop. Returns true if the window needs to be kept alive,
                 /// otherwise it will be closed. Window events should be checked to ensure that their ID is one
                 /// that the TrackedWindow is interested in.
-                async fn handle_event(
+                async fn handle_event<TS: egui_multiwin::async_winit::ThreadSafety>(
                     &mut self,
-                    event: &egui_multiwin::async_winit::event::Event<egui_multiwin::async_winit::ThreadUnsafe>,
-                    el: &EventLoopWindowTarget<egui_multiwin::async_winit::ThreadUnsafe>,
+                    event: &egui_multiwin::async_winit::event::Event<TS>,
+                    el: &EventLoopWindowTarget<TS>,
                     c: &mut $common,
                     root_window_exists: bool,
                     gl_window: &mut egui_multiwin::tracked_window::ContextHolder<
                         PossiblyCurrentContext,
+                        TS
                     >,
                     clipboard: &mut egui_multiwin::arboard::Clipboard,
                 ) -> TrackedWindowControl {
@@ -191,19 +157,19 @@ macro_rules! tracked_window {
                     let mut viewportset = self.viewportset.lock().unwrap();
 
                     let response = match event {
-                        egui_multiwin::winit::event::Event::WindowEvent { event, window_id } => {
+                        egui_multiwin::async_winit::event::Event::WindowEvent { event, window_id } => {
                             let mut redraw_thing = None;
                             match event {
-                                egui_multiwin::winit::event::WindowEvent::Resized(physical_size) => {
+                                egui_multiwin::async_winit::event::WindowEvent::Resized(physical_size) => {
                                     gl_window.resize(*physical_size);
                                 }
-                                egui_multiwin::winit::event::WindowEvent::CloseRequested => {
+                                egui_multiwin::async_winit::event::WindowEvent::CloseRequested => {
                                     control_flow = None;
                                 }
-                                egui_multiwin::winit::event::WindowEvent::RedrawRequested => {
+                                egui_multiwin::async_winit::event::WindowEvent::RedrawRequested => {
                                     println!("Window id is {:?}", window_id);
                                     redraw_thing = {
-                                        let input = self.egui.egui_winit.take_egui_input(gl_window.window.window());
+                                        let input = self.egui.egui_winit.take_egui_input(&gl_window.window).await;
                                         let ppp = self.egui.egui_ctx.pixels_per_point();
                                         self.egui.egui_ctx.begin_frame(input);
                                         let mut rr = RedrawResponse::default();
@@ -211,7 +177,7 @@ macro_rules! tracked_window {
                                             cb(&self.egui.egui_ctx);
                                         }
                                         else if let Some(window) = self.window.window_data() {
-                                            rr = window.redraw(c, self.egui, gl_window.window.window(), clipboard);
+                                            rr = window.redraw(c, self.egui, &gl_window.window, clipboard).await;
                                         }
                                         let full_output = self.egui.egui_ctx.end_frame();
                 
@@ -249,7 +215,6 @@ macro_rules! tracked_window {
                                                 let vp = NewWindowRequest::new_viewport(
                                                     builder,
                                                     options,
-                                                    egui_multiwin::multi_window::new_id(),
                                                     viewport_output.builder.clone(),
                                                     viewport_id.to_owned(),
                                                     self.viewportset.to_owned(),
@@ -270,14 +235,14 @@ macro_rules! tracked_window {
                                             control_flow = None;
                                         } else if repaint_after.is_zero() {
                                             gl_window.window.request_redraw();
-                                            control_flow = Some(egui_multiwin::winit::event_loop::ControlFlow::Poll);
+                                            control_flow = Some(egui_multiwin::async_winit::event_loop::ControlFlow::Poll);
                                         } else if repaint_after.as_millis() > 0 && repaint_after.as_millis() < 10000 {
                                             control_flow =
-                                                Some(egui_multiwin::winit::event_loop::ControlFlow::WaitUntil(
+                                                Some(egui_multiwin::async_winit::event_loop::ControlFlow::WaitUntil(
                                                     std::time::Instant::now() + repaint_after,
                                                 ));
                                         } else {
-                                            control_flow = Some(egui_multiwin::winit::event_loop::ControlFlow::Wait);
+                                            control_flow = Some(egui_multiwin::async_winit::event_loop::ControlFlow::Wait);
                                         };
                 
                                         {
@@ -318,7 +283,7 @@ macro_rules! tracked_window {
                                 _ => {}
                             }
 
-                            let resp = self.egui.on_window_event(gl_window.window.window(), event);
+                            let resp = self.egui.on_window_event(&gl_window.window, event);
                             if resp.repaint {
                                 println!("Requesting repaint because of window event");
                                 gl_window.window.request_redraw();
@@ -326,7 +291,7 @@ macro_rules! tracked_window {
 
                             redraw_thing
                         }
-                        egui_multiwin::winit::event::Event::LoopExiting => {
+                        egui_multiwin::async_winit::event::Event::LoopExiting => {
                             self.egui.destroy();
                             None
                         }
@@ -354,17 +319,17 @@ macro_rules! tracked_window {
             }
 
             /// Defines a window
-            pub enum TrackedWindowContainer {
+            pub enum TrackedWindowContainer<TS: egui_multiwin::async_winit::ThreadSafety> {
                 /// A root window
-                PlainWindow(PlainWindowContainer),
+                PlainWindow(PlainWindowContainer<TS>),
                 /// A viewport window
-                Viewport(ViewportWindowContainer),
+                Viewport(ViewportWindowContainer<TS>),
             }
 
             /// The common data for all window types
-            pub struct CommonWindowData {
+            pub struct CommonWindowData<TS: egui_multiwin::async_winit::ThreadSafety> {
                 /// The context for the window
-                pub gl_window: IndeterminateWindowedContext,
+                pub gl_window: IndeterminateWindowedContext<TS>,
                 /// The egui instance for this window, each window has a separate egui instance.
                 pub egui: Option<EguiGlow>,
                 /// The viewport set
@@ -372,7 +337,7 @@ macro_rules! tracked_window {
                 /// The viewport id for the window
                 viewportid: ViewportId,
                 /// The optional shader version for the window
-                pub shader: Option<egui_multiwin::egui_glow::ShaderVersion>,
+                pub shader: Option<egui_multiwin::egui_glow_async::ShaderVersion>,
                 /// The viewport builder
                 pub vb: Option<ViewportBuilder>,
                 /// The viewport callback
@@ -380,20 +345,20 @@ macro_rules! tracked_window {
             }
 
             /// The container for a viewport window
-            pub struct ViewportWindowContainer {
+            pub struct ViewportWindowContainer<TS: egui_multiwin::async_winit::ThreadSafety> {
                 /// The common data
-                common: CommonWindowData,
+                common: CommonWindowData<TS>,
             }
 
             /// The main container for a root window.
-            pub struct PlainWindowContainer {
+            pub struct PlainWindowContainer<TS: egui_multiwin::async_winit::ThreadSafety> {
                 /// The common data
-                common: CommonWindowData,
+                common: CommonWindowData<TS>,
                 /// The actual window
                 pub window: $window,
             }
 
-            impl TrackedWindowContainer {
+            impl<TS: egui_multiwin::async_winit::ThreadSafety + 'static> TrackedWindowContainer<TS> {
                 /// Get the optional window data contained by the window
                 pub fn get_window_data(&self) -> Option<& $window> {
                     match self {
@@ -411,7 +376,7 @@ macro_rules! tracked_window {
                 }
 
                 /// Get the common data for the window
-                fn common(&self) -> &CommonWindowData {
+                fn common(&self) -> &CommonWindowData<TS> {
                     match self {
                         Self::PlainWindow(w) => &w.common,
                         Self::Viewport(w) => &w.common,
@@ -419,7 +384,7 @@ macro_rules! tracked_window {
                 }
 
                 /// Get the common data, mutably, for the window
-                fn common_mut(&mut self) -> &mut CommonWindowData {
+                fn common_mut(&mut self) -> &mut CommonWindowData<TS> {
                     match self {
                         Self::PlainWindow(w) => &mut w.common,
                         Self::Viewport(w) => &mut w.common,
@@ -427,7 +392,7 @@ macro_rules! tracked_window {
                 }
 
                 /// Get the gl window for the container
-                fn gl_window(&self) -> &IndeterminateWindowedContext {
+                fn gl_window(&self) -> &IndeterminateWindowedContext<TS> {
                     match self {
                         Self::PlainWindow(w) => &w.common.gl_window,
                         Self::Viewport(w) => &w.common.gl_window,
@@ -435,21 +400,10 @@ macro_rules! tracked_window {
                 }
 
                 /// Get the gl window, mutably for the container
-                fn gl_window_mut(&mut self) -> &mut IndeterminateWindowedContext {
+                fn gl_window_mut(&mut self) -> &mut IndeterminateWindowedContext<TS> {
                     match self {
                         Self::PlainWindow(w) => &mut w.common.gl_window,
                         Self::Viewport(w) => &mut w.common.gl_window,
-                    }
-                }
-
-                /// Retrieve the window id for the container
-                pub fn get_window_id(&self) -> Option<WindowId> {
-                    match self.gl_window() {
-                        IndeterminateWindowedContext::PossiblyCurrent(w) => Some(w.window.id()),
-                        IndeterminateWindowedContext::NotCurrent(w) => Some(w.window.id()),
-                        IndeterminateWindowedContext::None => {
-                            None
-                        }
                     }
                 }
 
@@ -463,7 +417,7 @@ macro_rules! tracked_window {
                     event_loop: &egui_multiwin::async_winit::event_loop::EventLoopWindowTarget,
                     options: &TrackedWindowOptions,
                     vb: Option<ViewportBuilder>
-                ) -> Result<TrackedWindowContainer, DisplayCreationError> {
+                ) -> Result<TrackedWindowContainer<TS>, DisplayCreationError> {
                     let rdh = event_loop.raw_display_handle();
                     let winitwindow = window_builder.build().await.unwrap();
                     let rwh = winitwindow.raw_window_handle();
@@ -534,7 +488,7 @@ macro_rules! tracked_window {
                 }
 
                 /// Returns true if the specified event is for this window. A UserEvent (one generated by the EventLoopProxy) is not for any window.
-                pub fn is_event_for_window(&self, event: &winit::event::Event<egui_multiwin::async_winit::ThreadUnsafe>) -> bool {
+                pub fn is_event_for_window(&self, event: &async_winit::event::Event<TS>) -> bool {
                     // Check if the window ID matches, if not then this window can pass on the event.
                     match (event, self.gl_window()) {
                         (
@@ -595,8 +549,8 @@ macro_rules! tracked_window {
                 pub async fn handle_event_outer(
                     &mut self,
                     c: &mut $common,
-                    event: &winit::event::Event<egui_multiwin::async_winit::ThreadUnsafe>,
-                    el: &EventLoopWindowTarget<egui_multiwin::async_winit::ThreadUnsafe>,
+                    event: &async_winit::event::Event<TS>,
+                    el: &EventLoopWindowTarget<TS>,
                     root_window_exists: bool,
                     fontmap: &HashMap<String, egui::FontData>,
                     clipboard: &mut arboard::Clipboard,
@@ -630,7 +584,7 @@ macro_rules! tracked_window {
                                 use glow::HasContext as _;
                                 gl.enable(glow::FRAMEBUFFER_SRGB);
                             }
-                            let egui = egui_glow::EguiGlow::new(el, gl, self.common().shader, None);
+                            let egui = egui_glow_async::EguiGlow::new(el, gl, self.common().shader, None);
                             {
                                 let mut fonts = egui::FontDefinitions::default();
                                 for (name, font) in fontmap {
@@ -643,7 +597,7 @@ macro_rules! tracked_window {
                                 egui.egui_ctx.set_fonts(fonts)
                             }
                             if let Some(vb) = &self.common().vb {
-                                egui_multiwin::egui_glow::egui_winit::apply_viewport_builder_to_window(
+                                egui_multiwin::egui_glow_async::egui_async_winit::apply_viewport_builder_to_window(
                                     &egui.egui_ctx,
                                     gl_window.window(),
                                     vb,
@@ -702,18 +656,18 @@ macro_rules! tracked_window {
             }
 
             /// Enum of the potential options for a window context
-            pub enum IndeterminateWindowedContext {
+            pub enum IndeterminateWindowedContext<TS: egui_multiwin::async_winit::ThreadSafety> {
                 /// The window context is possibly current
-                PossiblyCurrent(ContextHolder<PossiblyCurrentContext>),
+                PossiblyCurrent(ContextHolder<PossiblyCurrentContext, TS>),
                 /// The window context is not current
-                NotCurrent(ContextHolder<NotCurrentContext>),
+                NotCurrent(ContextHolder<NotCurrentContext, TS>),
                 /// The window context is empty
                 None,
             }
 
-            impl IndeterminateWindowedContext {
+            impl<TS: egui_multiwin::async_winit::ThreadSafety> IndeterminateWindowedContext<TS> {
                 /// Get the window handle
-                pub fn window(&self) -> &winit::window::Window {
+                pub fn window(&self) -> &async_winit::window::Window<TS> {
                     match self {
                         IndeterminateWindowedContext::PossiblyCurrent(pc) => pc.window(),
                         IndeterminateWindowedContext::NotCurrent(nc) => nc.window(),
@@ -765,25 +719,28 @@ macro_rules! multi_window {
 
             /// The main struct of the crate. Manages multiple `TrackedWindow`s by forwarding events to them.
             /// `T` represents the common data struct for the user program. `U` is the type representing custom events.
-            pub struct MultiWindow {
+            pub struct MultiWindow<TS: egui_multiwin::async_winit::ThreadSafety> {
+                /// The event loop for the application
+                event_loop: egui_multiwin::async_winit::event_loop::EventLoop,
                 /// The windows for the application.
-                windows: Vec<TrackedWindowContainer>,
+                windows: Vec<TrackedWindowContainer<TS>>,
                 /// A list of fonts to install on every egui instance
                 fonts: HashMap<String, egui_multiwin::egui::FontData>,
                 /// The clipboard
                 clipboard: egui_multiwin::arboard::Clipboard,
             }
 
-            impl Default for MultiWindow {
+            impl<TS: egui_multiwin::async_winit::ThreadSafety + 'static> Default for MultiWindow<TS> {
                 fn default() -> Self {
                     Self::new()
                 }
             }
 
-            impl MultiWindow {
+            impl<TS: egui_multiwin::async_winit::ThreadSafety + 'static> MultiWindow<TS> {
                 /// Creates a new `MultiWindow`.
                 pub fn new() -> Self {
                     MultiWindow {
+                        event_loop: egui_multiwin::async_winit::event_loop::EventLoop::new(),
                         windows: vec![],
                         fonts: HashMap::new(),
                         clipboard: egui_multiwin::arboard::Clipboard::new().unwrap(),
@@ -794,7 +751,7 @@ macro_rules! multi_window {
                 pub async fn start(
                     t: impl FnOnce(
                         &mut Self,
-                        &EventLoop<egui_multiwin::async_winit::ThreadUnsafe>,
+                        &EventLoop<TS>,
                     ) -> $common,
                 ) -> Result<(), EventLoopError> {
                     let mut event_loop =
@@ -804,7 +761,7 @@ macro_rules! multi_window {
 
                     let ac = t(&mut multi_window, &event_loop);
 
-                    multi_window.run(event_loop, ac)
+                    multi_window.run(ac)
                 }
 
                 /// Add a font that is applied to every window. Be sure to call this before calling [add](crate::multi_window::MultiWindow::add)
@@ -831,8 +788,6 @@ macro_rules! multi_window {
                 pub async fn add(
                     &mut self,
                     window: NewWindowRequest,
-                    _c: &mut $common,
-                    event_loop: &egui_multiwin::async_winit::event_loop::EventLoopWindowTarget,
                 ) -> Result<(), DisplayCreationError> {
                     let twc = TrackedWindowContainer::create(
                         window.window_state,
@@ -842,15 +797,10 @@ macro_rules! multi_window {
                             .unwrap_or(egui::viewport::ViewportId::ROOT),
                         window.viewport_callback,
                         window.builder,
-                        event_loop,
+                        self.event_loop.window_target(),
                         &window.options,
                         window.viewport,
                     ).await?;
-                    let w = twc.get_window_id();
-                    let mut table = egui_multiwin::multi_window::WINDOW_TABLE.lock().unwrap();
-                    if let Some(id) = table.get_mut(&window.id) {
-                        *id = w;
-                    }
                     self.windows.push(twc);
                     Ok(())
                 }
@@ -859,8 +809,8 @@ macro_rules! multi_window {
                 pub async fn do_window_events(
                     &mut self,
                     c: &mut $common,
-                    event: &async_winit::event::Event<egui_multiwin::async_winit::ThreadUnsafe>,
-                    event_loop_window_target: &egui_multiwin::async_winit::event_loop::EventLoopWindowTarget,
+                    event: &async_winit::event::Event<TS>,
+                    event_loop_window_target: &egui_multiwin::async_winit::event_loop::EventLoopWindowTarget<TS>,
                 ) -> Vec<Option<ControlFlow>> {
                     let mut handled_windows = vec![];
                     let mut window_control_flow = vec![];
@@ -906,7 +856,7 @@ macro_rules! multi_window {
                             }
 
                             for new_window_request in window_control.windows_to_create {
-                                let _e = self.add(new_window_request, c, event_loop_window_target);
+                                let _e = self.add(new_window_request);
                             }
                         }
                         handled_windows.push(window);
@@ -922,10 +872,9 @@ macro_rules! multi_window {
                 /// Runs the event loop until all `TrackedWindow`s are closed.
                 pub fn run(
                     mut self,
-                    event_loop: EventLoop<egui_multiwin::async_winit::ThreadUnsafe>,
                     mut c: $common,
                 ) -> Result<(), EventLoopError> {
-                    event_loop.block_on(async {
+                    self.event_loop.block_on(async {
                         todo!();
                     })
                     /*
@@ -994,8 +943,6 @@ macro_rules! multi_window {
                 pub builder: egui_multiwin::async_winit::window::WindowBuilder,
                 /// Other options for the window.
                 pub options: TrackedWindowOptions,
-                /// An id to allow a user program to translate window requests into actual window ids.
-                pub id: u32,
                 /// The viewport options
                 viewport: Option<egui_multiwin::egui::ViewportBuilder>,
                 /// The viewport id
@@ -1012,13 +959,11 @@ macro_rules! multi_window {
                     window_state: $window,
                     builder: egui_multiwin::async_winit::window::WindowBuilder,
                     options: TrackedWindowOptions,
-                    id: u32,
                 ) -> Self {
                     Self {
                         window_state: Some(window_state),
                         builder,
                         options,
-                        id,
                         viewport: None,
                         viewport_id: None,
                         viewportset: Arc::new(Mutex::new(egui::viewport::ViewportIdSet::default())),
@@ -1030,7 +975,6 @@ macro_rules! multi_window {
                 pub fn new_viewport(
                     builder: egui_multiwin::async_winit::window::WindowBuilder,
                     options: TrackedWindowOptions,
-                    id: u32,
                     vp_builder: egui_multiwin::egui::ViewportBuilder,
                     vp_id: ViewportId,
                     viewportset: Arc<Mutex<ViewportIdSet>>,
@@ -1040,7 +984,6 @@ macro_rules! multi_window {
                         window_state: None,
                         builder,
                         options,
-                        id,
                         viewport: Some(vp_builder),
                         viewport_id: Some(vp_id),
                         viewport_callback: vpcb,

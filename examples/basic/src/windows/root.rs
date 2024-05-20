@@ -7,7 +7,7 @@ use crate::egui_multiwin_dynamic::{
     tracked_window::{RedrawResponse, TrackedWindow},
 };
 use egui_multiwin::egui::FontId;
-use egui_multiwin::egui_glow::EguiGlow;
+use egui_multiwin::egui_glow_async::EguiGlow;
 
 use crate::AppCommon;
 
@@ -40,7 +40,7 @@ impl RootWindow {
             }),
             egui_multiwin::async_winit::window::WindowBuilder::new()
                 .with_resizable(true)
-                .with_inner_size(egui_multiwin::winit::dpi::LogicalSize {
+                .with_inner_size(egui_multiwin::async_winit::dpi::LogicalSize {
                     width: 800.0,
                     height: 600.0,
                 })
@@ -49,7 +49,6 @@ impl RootWindow {
                 vsync: false,
                 shader: None,
             },
-            egui_multiwin::multi_window::new_id(),
         )
     }
 }
@@ -61,11 +60,11 @@ impl TrackedWindow for RootWindow {
 
     fn set_root(&mut self, _root: bool) {}
 
-    fn redraw(
+    async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
         &mut self,
         c: &mut AppCommon,
         egui: &mut EguiGlow,
-        _window: &egui_multiwin::winit::window::Window,
+        _window: &egui_multiwin::async_winit::window::Window<TS>,
         _clipboard: &mut egui_multiwin::arboard::Clipboard,
     ) -> RedrawResponse {
         let mut quit = false;

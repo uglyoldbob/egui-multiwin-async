@@ -30,22 +30,10 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
-use winit::window::WindowId;
-
 pub use {
-    arboard, async_winit, egui, egui_glow, enum_dispatch, glutin, raw_window_handle, raw_window_handle_5,
-    thiserror, winit,
+    arboard, async_winit, egui, egui_glow_async, enum_dispatch, glutin, raw_window_handle_6, raw_window_handle_5,
+    thiserror
 };
 pub mod multi_window;
 pub mod tracked_window;
 
-/// A generic non-event providing struct that users can use when they don't need custom events.
-#[derive(Debug)]
-pub struct NoEvent {}
-
-impl NoEvent {
-    /// Returns a None for window_id
-    pub fn window_id(&self) -> Option<WindowId> {
-        None
-    }
-}

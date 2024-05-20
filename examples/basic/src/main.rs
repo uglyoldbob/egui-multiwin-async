@@ -3,7 +3,7 @@
 
 //! This is a basic example
 
-use egui_multiwin_dynamic::multi_window::{MultiWindow, NewWindowRequest};
+use egui_multiwin_dynamic::multi_window::MultiWindow;
 
 /// Macro generated code
 pub mod egui_multiwin_dynamic {
@@ -33,17 +33,9 @@ pub struct AppCommon {
     clicks: u32,
 }
 
-impl AppCommon {
-    /// Process events
-    fn process_event(&mut self, _event: egui_multiwin::NoEvent) -> Vec<NewWindowRequest> {
-        Vec::new()
-    }
-}
-
 #[tokio::main]
 async fn main() {
-    let event_loop = egui_multiwin::async_winit::event_loop::EventLoop::new();
-    let mut multi_window: MultiWindow = MultiWindow::new();
+    let mut multi_window: MultiWindow<egui_multiwin::async_winit::DefaultThreadSafety> = MultiWindow::new();
     multi_window.add_font(
         "computermodern".to_string(),
         egui_multiwin::egui::FontData::from_static(COMPUTER_MODERN_FONT),
@@ -51,11 +43,9 @@ async fn main() {
     let root_window = root::RootWindow::request();
     let root_window2 = popup_window::PopupWindow::request("initial popup".to_string());
 
-    let mut ac = AppCommon { clicks: 0 };
+    let ac = AppCommon { clicks: 0 };
 
-    let window_target = event_loop.window_target();
-
-    let _e = multi_window.add(root_window, &mut ac, window_target).await;
-    let _e = multi_window.add(root_window2, &mut ac, window_target).await;
-    multi_window.run(event_loop, ac).unwrap();
+    let _e = multi_window.add(root_window).await;
+    let _e = multi_window.add(root_window2).await;
+    multi_window.run(ac).unwrap();
 }

@@ -11,11 +11,11 @@ use glutin::surface::WindowSurface;
 use thiserror::Error;
 
 /// A holder of context and related items
-pub struct ContextHolder<T> {
+pub struct ContextHolder<T, TS: async_winit::ThreadSafety> {
     /// The context being held
     context: T,
     /// The window
-    pub window: async_winit::window::Window<async_winit::ThreadUnsafe>,
+    pub window: async_winit::window::Window<TS>,
     /// The window surface
     ws: glutin::surface::Surface<WindowSurface>,
     /// The display
@@ -24,11 +24,11 @@ pub struct ContextHolder<T> {
     options: TrackedWindowOptions,
 }
 
-impl<T> ContextHolder<T> {
+impl<T, TS: async_winit::ThreadSafety> ContextHolder<T, TS> {
     /// Create a new context holder
     pub fn new(
         context: T,
-        window: async_winit::window::Window<async_winit::ThreadUnsafe>,
+        window: async_winit::window::Window<TS>,
         ws: glutin::surface::Surface<WindowSurface>,
         display: glutin::display::Display,
         options: TrackedWindowOptions,
@@ -42,14 +42,14 @@ impl<T> ContextHolder<T> {
         }
     }
 }
-impl<T> ContextHolder<T> {
+impl<T, TS: async_winit::ThreadSafety> ContextHolder<T, TS> {
     /// Get the window handle
-    pub fn window(&self) -> &winit::window::Window {
-        self.window.window()
+    pub fn window(&self) -> &async_winit::window::Window<TS> {
+        &self.window
     }
 }
 
-impl ContextHolder<PossiblyCurrentContext> {
+impl<TS: async_winit::ThreadSafety> ContextHolder<PossiblyCurrentContext, TS> {
     /// Call swap_buffers. linux targets have vsync specifically disabled because it causes problems with hidden windows.
     pub fn swap_buffers(&self) -> glutin::error::Result<()> {
         if self.options.vsync {
@@ -66,7 +66,7 @@ impl ContextHolder<PossiblyCurrentContext> {
     }
 
     /// Resize the window to the specified size. The size cannot be zero in either dimension.
-    pub fn resize(&self, size: winit::dpi::PhysicalSize<u32>) {
+    pub fn resize(&self, size: async_winit::dpi::PhysicalSize<u32>) {
         let w = size.width;
         let h = size.height;
         self.ws.resize(
@@ -89,13 +89,13 @@ impl ContextHolder<PossiblyCurrentContext> {
     }
 }
 
-impl ContextHolder<NotCurrentContext> {
+impl<TS: async_winit::ThreadSafety> ContextHolder<NotCurrentContext, TS> {
     /// Transforms a not current context into a possibly current context
     pub fn make_current(
         self,
-    ) -> Result<ContextHolder<PossiblyCurrentContext>, glutin::error::Error> {
+    ) -> Result<ContextHolder<PossiblyCurrentContext, TS>, glutin::error::Error> {
         let c = self.context.make_current(&self.ws).unwrap();
-        let s = ContextHolder::<PossiblyCurrentContext> {
+        let s = ContextHolder::<PossiblyCurrentContext, TS> {
             context: c,
             window: self.window,
             ws: self.ws,
@@ -112,7 +112,7 @@ pub struct TrackedWindowOptions {
     /// Should the window be vsynced. Check github issues to see if this property actually does what it is supposed to.
     pub vsync: bool,
     /// Optionally sets the shader version for the window.
-    pub shader: Option<egui_glow::ShaderVersion>,
+    pub shader: Option<egui_glow_async::ShaderVersion>,
 }
 
 #[derive(Error, Debug)]
