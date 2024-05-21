@@ -31,8 +31,8 @@
 #![deny(clippy::missing_docs_in_private_items)]
 
 pub use {
-    arboard, async_winit, egui, egui_glow_async, enum_dispatch, glutin, raw_window_handle_5,
-    raw_window_handle_6, thiserror,
+    arboard, async_winit, egui, egui_glow_async, enum_dispatch, futures_lite, glutin,
+    raw_window_handle_5, raw_window_handle_6, thiserror,
 };
 pub mod multi_window;
 pub mod tracked_window;
@@ -43,8 +43,8 @@ pub mod future_set;
 pub struct Events {
     /// For root windows
     pub window_close: future_set::FuturesHashSetAll<()>,
-    /// For all windows
-    pub repaint: future_set::FuturesHashSetFirst<()>,
+    /// For non-root windows
+    pub non_root_windows: future_set::FuturesHashSet<()>,
 }
 
 impl Events {
@@ -52,7 +52,7 @@ impl Events {
     pub fn new() -> Self {
         Self {
             window_close: future_set::FuturesHashSetAll::new(),
-            repaint: future_set::FuturesHashSetFirst::new(),
+            non_root_windows: future_set::FuturesHashSet::new(),
         }
     }
 }

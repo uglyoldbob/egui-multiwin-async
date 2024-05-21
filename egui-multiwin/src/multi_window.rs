@@ -833,29 +833,26 @@ macro_rules! multi_window {
                             if s.is_root() {
                                 let twc2 = twc.clone();
                                 events.window_close.get().add_future(async move {
+                                    println!("Waiting for root window to close");
                                     let close = twc2.get_common().gl_window.window().close_requested().wait();
-                                    println!("Waiting for window to close");
                                     close.await;
-                                });
-                                let twc2 = twc.clone();
-                                events.repaint.get().add_future(async move {
-                                    let w = twc2.get_common().gl_window.window().redraw_requested().wait();
-                                    w.await;
                                 });
                             }
                             else {
                                 let twc2 = twc.clone();
-                                events.repaint.get().add_future(async move {
-                                    let w = twc2.get_common().gl_window.window().redraw_requested().wait();
-                                    w.await;
+                                events.non_root_windows.get().add_future(async move {
+                                    println!("Waiting for window to close");
+                                    let close = twc2.get_common().gl_window.window().close_requested().wait();
+                                    close.await;
                                 });
                             }
                         }
                         else {
                             let twc2 = twc.clone();
-                            events.repaint.get().add_future(async move {
-                                let w = twc2.get_common().gl_window.window().redraw_requested().wait();
-                                w.await;
+                            events.non_root_windows.get().add_future(async move {
+                                println!("Waiting for window to close");
+                                let close = twc2.get_common().gl_window.window().close_requested().wait();
+                                close.await;
                             });
                         }
                     }
@@ -880,7 +877,14 @@ macro_rules! multi_window {
                             event_loop_window_target.resumed().await;
                             let mut events = egui_multiwin::Events::new();
                             self.process_pending_windows(&event_loop_window_target, &mut events).await;
-                            events.window_close.clone().await;
+                            let mut wc = events.window_close.clone();
+                            let mut oc = events.non_root_windows.clone();
+                            loop {
+                                tokio::select! {
+                                    _ = &mut wc => { break; }
+                                    _ = egui_multiwin::futures_lite::stream::StreamExt::next(&mut oc) => { println!("Window closed?"); }
+                                }
+                            }
                             println!("Exiting?");
                             event_loop_window_target.exit().await
                         })
