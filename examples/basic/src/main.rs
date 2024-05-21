@@ -51,9 +51,9 @@ async fn main() {
     let ac = AppCommon { clicks: 0 };
     println!("Startup 6");
 
-    let _e = multi_window.add(root_window).await;
+    multi_window.add(root_window);
     println!("Startup 7");
-    let _e = multi_window.add(root_window2).await;
+    multi_window.add(root_window2);
     println!("Startup 8");
     multi_window.run(ac).unwrap();
     println!("Startup 9");

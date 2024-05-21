@@ -418,23 +418,31 @@ macro_rules! tracked_window {
                     options: &TrackedWindowOptions,
                     vb: Option<ViewportBuilder>
                 ) -> Result<TrackedWindowContainer<TS>, DisplayCreationError> {
+                    println!("Create window function");
                     let rdh = event_loop.raw_display_handle();
+                    println!("Create window function 1.1");
                     let winitwindow = window_builder.build().await.unwrap();
+                    println!("Create window function 1.2");
                     let rwh = winitwindow.raw_window_handle();
+                    println!("Create window function 2");
                     #[cfg(target_os = "windows")]
                     let pref = glutin::display::DisplayApiPreference::Wgl(Some(rwh));
                     #[cfg(target_os = "linux")]
                     let pref = egui_multiwin::glutin::display::DisplayApiPreference::Egl;
                     #[cfg(target_os = "macos")]
                     let pref = glutin::display::DisplayApiPreference::Cgl;
+                    println!("Create window function 3");
                     let display = unsafe { glutin::display::Display::new(rdh, pref) };
+                    println!("Create window function 4");
                     if let Ok(display) = display {
+                        println!("Display is ok! {:?}", display);
                         let configt = glutin::config::ConfigTemplateBuilder::default().build();
                         let mut configs: Vec<glutin::config::Config> =
                             unsafe { display.find_configs(configt) }.unwrap().collect();
                         configs.sort_by(|a, b| a.num_samples().cmp(&b.num_samples()));
                         // Try all configurations until one works
                         for config in configs {
+                            println!("Examining a config {:?}", config);
                             let sab: SurfaceAttributesBuilder<WindowSurface> =
                                 egui_multiwin::glutin::surface::SurfaceAttributesBuilder::default();
                             let sa = sab.build(
@@ -722,7 +730,9 @@ macro_rules! multi_window {
             /// `T` represents the common data struct for the user program. `U` is the type representing custom events.
             pub struct MultiWindow<TS: egui_multiwin::async_winit::ThreadSafety> {
                 /// The event loop for the application
-                event_loop: egui_multiwin::async_winit::event_loop::EventLoop,
+                event_loop: Option<egui_multiwin::async_winit::event_loop::EventLoop>,
+                /// List of windows to be created
+                pending_windows: Vec<NewWindowRequest>,
                 /// The windows for the application.
                 windows: Vec<TrackedWindowContainer<TS>>,
                 /// A list of fonts to install on every egui instance
@@ -741,7 +751,8 @@ macro_rules! multi_window {
                 /// Creates a new `MultiWindow`.
                 pub fn new() -> Self {
                     MultiWindow {
-                        event_loop: egui_multiwin::async_winit::event_loop::EventLoop::new(),
+                        event_loop: Some(egui_multiwin::async_winit::event_loop::EventLoop::new()),
+                        pending_windows: vec![],
                         windows: vec![],
                         fonts: HashMap::new(),
                         clipboard: egui_multiwin::arboard::Clipboard::new().unwrap(),
@@ -786,23 +797,29 @@ macro_rules! multi_window {
                 }
 
                 /// Adds a new `TrackedWindow` to the `MultiWindow`. If custom fonts are desired, call [add_font](crate::multi_window::MultiWindow::add_font) first.
-                pub async fn add(
+                pub fn add(
                     &mut self,
                     window: NewWindowRequest,
-                ) -> Result<(), DisplayCreationError> {
-                    let twc = TrackedWindowContainer::create(
-                        window.window_state,
-                        window.viewportset,
-                        &window
-                            .viewport_id
-                            .unwrap_or(egui::viewport::ViewportId::ROOT),
-                        window.viewport_callback,
-                        window.builder,
-                        self.event_loop.window_target(),
-                        &window.options,
-                        window.viewport,
-                    ).await?;
-                    self.windows.push(twc);
+                ) {
+                    self.pending_windows.push(window);
+                }
+
+                async fn process_pending_windows(&mut self, elwt: &async_winit::event_loop::EventLoopWindowTarget) -> Result<(), DisplayCreationError> {
+                    while let Some(window) = self.pending_windows.pop() {
+                        let twc = TrackedWindowContainer::create(
+                            window.window_state,
+                            window.viewportset,
+                            &window
+                                .viewport_id
+                                .unwrap_or(egui::viewport::ViewportId::ROOT),
+                            window.viewport_callback,
+                            window.builder,
+                            elwt,
+                            &window.options,
+                            window.viewport,
+                        ).await?;
+                        self.windows.push(twc);
+                    }
                     Ok(())
                 }
 
@@ -875,11 +892,13 @@ macro_rules! multi_window {
                     mut self,
                     mut c: $common,
                 ) -> Result<(), EventLoopError> {
-                    let event_loop_window_target = self.event_loop.window_target().clone();
+                    let event_loop_window_target = self.event_loop.as_ref().unwrap().window_target().clone();
                     println!("Stuff 1");
-                    self.event_loop.block_on(
+                    self.event_loop.take().unwrap().block_on(
                         async move {
                             println!("App startup");
+                            let e = self.process_pending_windows(&event_loop_window_target).await;
+                            println!("Window start returned {:?}", e);
                             loop {
                                 event_loop_window_target.resumed().await;
                                 println!("Unknown status, looping infinitely");
