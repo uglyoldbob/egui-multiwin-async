@@ -326,6 +326,16 @@ macro_rules! tracked_window {
                 Viewport(ViewportWindowContainer<TS>),
             }
 
+            impl<TS: egui_multiwin::async_winit::ThreadSafety> TrackedWindowContainer<TS> {
+                /// Get the common data reference
+                pub fn get_common(&self) -> &CommonWindowData<TS> {
+                    match self {
+                        Self::PlainWindow(p) => &p.common,
+                        Self::Viewport(v) => &v.common,
+                    }
+                }
+            }
+
             /// The common data for all window types
             pub struct CommonWindowData<TS: egui_multiwin::async_winit::ThreadSafety> {
                 /// The context for the window
@@ -414,7 +424,7 @@ macro_rules! tracked_window {
                     viewportid: &ViewportId,
                     viewportcb: Option<std::sync::Arc<DeferredViewportUiCallback>>,
                     window_builder: egui_multiwin::async_winit::window::WindowBuilder,
-                    event_loop: &egui_multiwin::async_winit::event_loop::EventLoopWindowTarget,
+                    event_loop: &egui_multiwin::async_winit::event_loop::EventLoopWindowTarget<TS>,
                     options: &TrackedWindowOptions,
                     vb: Option<ViewportBuilder>
                 ) -> Result<TrackedWindowContainer<TS>, DisplayCreationError> {
@@ -730,11 +740,9 @@ macro_rules! multi_window {
             /// `T` represents the common data struct for the user program. `U` is the type representing custom events.
             pub struct MultiWindow<TS: egui_multiwin::async_winit::ThreadSafety> {
                 /// The event loop for the application
-                event_loop: Option<egui_multiwin::async_winit::event_loop::EventLoop>,
+                event_loop: Option<egui_multiwin::async_winit::event_loop::EventLoop<TS>>,
                 /// List of windows to be created
                 pending_windows: Vec<NewWindowRequest>,
-                /// The windows for the application.
-                windows: Vec<TrackedWindowContainer<TS>>,
                 /// A list of fonts to install on every egui instance
                 fonts: HashMap<String, egui_multiwin::egui::FontData>,
                 /// The clipboard
@@ -753,7 +761,6 @@ macro_rules! multi_window {
                     MultiWindow {
                         event_loop: Some(egui_multiwin::async_winit::event_loop::EventLoop::new()),
                         pending_windows: vec![],
-                        windows: vec![],
                         fonts: HashMap::new(),
                         clipboard: egui_multiwin::arboard::Clipboard::new().unwrap(),
                     }
@@ -805,7 +812,7 @@ macro_rules! multi_window {
                 }
 
                 async fn process_pending_windows(&mut self, 
-                    elwt: &async_winit::event_loop::EventLoopWindowTarget,
+                    elwt: &async_winit::event_loop::EventLoopWindowTarget<TS>,
                     wclose: &egui_multiwin::future_set::FuturesHashSetFirst<()>,
                 ) -> Result<(), DisplayCreationError> {
                     while let Some(window) = self.pending_windows.pop() {
@@ -821,76 +828,23 @@ macro_rules! multi_window {
                             &window.options,
                             window.viewport,
                         ).await?;
-                        wclose.get().add_future(async {
-                            println!("Im only waiting 3 seconds");
-                            tokio::time::sleep(tokio::time::Duration::from_millis(3000)).await });
-                        self.windows.push(twc);
+                        if let Some(s) = &twc.get_window_data() {
+                            if s.is_root() {
+                                wclose.get().add_future(async move {
+                                    let w = twc.get_common().gl_window.window().close_requested().wait();
+                                    println!("Waiting for window to close");
+                                    w.await;
+                                });
+                            }
+                            else {
+                                todo!("Do something with twc")
+                            }
+                        }
+                        else {
+                            todo!("Do something with twc")
+                        }
                     }
                     Ok(())
-                }
-
-                /// Process the given event for the applicable window(s)
-                pub async fn do_window_events(
-                    &mut self,
-                    c: &mut $common,
-                    event: &async_winit::event::Event<TS>,
-                    event_loop_window_target: &egui_multiwin::async_winit::event_loop::EventLoopWindowTarget<TS>,
-                ) -> Vec<Option<ControlFlow>> {
-                    let mut handled_windows = vec![];
-                    let mut window_control_flow = vec![];
-
-                    let mut root_window_exists = false;
-                    for other in &self.windows {
-                        if let Some(window) = other.get_window_data() {
-                            if window.is_root() {
-                                root_window_exists = true;
-                            }
-                        }
-                    }
-
-                    while let Some(mut window) = self.windows.pop() {
-                        if window.is_event_for_window(event) {
-                            let window_control = window.handle_event_outer(
-                                c,
-                                event,
-                                event_loop_window_target,
-                                root_window_exists,
-                                &self.fonts,
-                                &mut self.clipboard,
-                            ).await;
-                            match window_control.requested_control_flow {
-                                None => {
-                                    //println!("window requested exit. Instead of sending the exit for everyone, just get rid of this one.");
-                                    if let Some(window) = window.get_window_data_mut() {
-                                        if window.can_quit(c) {
-                                            window_control_flow.push(None);
-                                            continue;
-                                        } else {
-                                            window_control_flow.push(Some(ControlFlow::Wait));
-                                        }
-                                    } else {
-                                        window_control_flow.push(None);
-                                        continue;
-                                    }
-                                    // *flow = ControlFlow::Exit
-                                }
-                                Some(requested_flow) => {
-                                    window_control_flow.push(Some(requested_flow));
-                                }
-                            }
-
-                            for new_window_request in window_control.windows_to_create {
-                                let _e = self.add(new_window_request);
-                            }
-                        }
-                        handled_windows.push(window);
-                    }
-
-                    // Move them back.
-                    handled_windows.reverse();
-                    self.windows.append(&mut handled_windows);
-
-                    window_control_flow
                 }
 
                 /// Runs the event loop until all `TrackedWindow`s are closed.
@@ -898,7 +852,12 @@ macro_rules! multi_window {
                     mut self,
                     mut c: $common,
                 ) -> Result<(), EventLoopError> {
-                    let event_loop_window_target = self.event_loop.as_ref().unwrap().window_target().clone();
+                    let event_loop_window_target: async_winit::event_loop::EventLoopWindowTarget<TS> = 
+                        self.event_loop
+                            .as_ref()
+                            .unwrap()
+                            .window_target()
+                            .clone();
                     println!("Stuff 1");
                     self.event_loop.take().unwrap().block_on(
                         async move {
@@ -906,9 +865,6 @@ macro_rules! multi_window {
                             event_loop_window_target.resumed().await;
                             let mut wclose = egui_multiwin::future_set::FuturesHashSetFirst::new();
                             self.process_pending_windows(&event_loop_window_target, &wclose).await;
-                            let w = wclose.get().add_future(async {
-                                println!("Im waiting 5 seconds");
-                                tokio::time::sleep(tokio::time::Duration::from_millis(5000)).await });
                             wclose.clone().await;
                             println!("Exiting?");
                             event_loop_window_target.exit().await
