@@ -133,7 +133,9 @@ impl TrackedWindow for PopupWindow {
                 let ui = uil.deref_mut();
                 if ui.button("Increment").clicked() {
                     c.clicks += 1;
-                    window.set_title(&format!("Title update {}", c.clicks)).await;
+                    window
+                        .set_title(&format!("Title update {}", c.clicks))
+                        .await;
                 }
                 let response = ui.add(egui_multiwin::egui::TextEdit::singleline(&mut self.input));
                 if response.changed() {
@@ -147,7 +149,8 @@ impl TrackedWindow for PopupWindow {
                 if ui.button("Quit").clicked() {
                     quit = true;
                 }
-            }).await;
+            })
+            .await;
         RedrawResponse {
             quit,
             new_windows: Vec::new(),

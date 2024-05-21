@@ -7,14 +7,8 @@ use egui_multiwin_dynamic::multi_window::MultiWindow;
 
 /// Macro generated code
 pub mod egui_multiwin_dynamic {
-    egui_multiwin::tracked_window!(
-        crate::AppCommon,
-        crate::windows::MyWindows
-    );
-    egui_multiwin::multi_window!(
-        crate::AppCommon,
-        crate::windows::MyWindows
-    );
+    egui_multiwin::tracked_window!(crate::AppCommon, crate::windows::MyWindows);
+    egui_multiwin::multi_window!(crate::AppCommon, crate::windows::MyWindows);
 }
 
 mod windows;
@@ -36,7 +30,8 @@ pub struct AppCommon {
 #[tokio::main]
 async fn main() {
     println!("Startup 1");
-    let mut multi_window: MultiWindow<egui_multiwin::async_winit::DefaultThreadSafety> = MultiWindow::new();
+    let mut multi_window: MultiWindow<egui_multiwin::async_winit::DefaultThreadSafety> =
+        MultiWindow::new();
     println!("Startup 2");
     multi_window.add_font(
         "computermodern".to_string(),

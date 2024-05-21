@@ -69,7 +69,8 @@ impl TrackedWindow for RootWindow {
     ) -> RedrawResponse {
         let mut quit = false;
 
-        egui.egui_ctx.request_repaint_after(Duration::from_millis(9500));
+        egui.egui_ctx
+            .request_repaint_after(Duration::from_millis(9500));
 
         let cur_time = std::time::Instant::now();
         let delta = cur_time.duration_since(self.prev_time);

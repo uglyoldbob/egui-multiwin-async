@@ -31,9 +31,10 @@
 #![deny(clippy::missing_docs_in_private_items)]
 
 pub use {
-    arboard, async_winit, egui, egui_glow_async, enum_dispatch, glutin, raw_window_handle_6, raw_window_handle_5,
-    thiserror
+    arboard, async_winit, egui, egui_glow_async, enum_dispatch, glutin, raw_window_handle_5,
+    raw_window_handle_6, thiserror,
 };
 pub mod multi_window;
 pub mod tracked_window;
 
+pub mod future_set;

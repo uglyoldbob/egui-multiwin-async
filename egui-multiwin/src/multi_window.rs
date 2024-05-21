@@ -180,7 +180,7 @@ macro_rules! tracked_window {
                                             rr = window.redraw(c, self.egui, &gl_window.window, clipboard).await;
                                         }
                                         let full_output = self.egui.egui_ctx.end_frame();
-                
+
                                         if self.viewport_callback.is_none() {
                                             let mut remove_id = Vec::new();
                                             for id in viewportset.iter() {
@@ -197,7 +197,7 @@ macro_rules! tracked_window {
                                                 rr.quit = true;
                                             }
                                         }
-                
+
                                         for (viewport_id, viewport_output) in &full_output.viewport_output {
                                             if viewport_id != &egui::viewport::ViewportId::ROOT && !viewportset.contains(viewport_id) {
                                                 let builder = egui_multiwin::async_winit::window::WindowBuilder::new();
@@ -224,13 +224,13 @@ macro_rules! tracked_window {
                                                 rr.new_windows.push(vp);
                                             }
                                         }
-                
+
                                         let vp_output = full_output
                                             .viewport_output
                                             .get(self.viewportid);
                                         let repaint_after = vp_output.map(|v| v.repaint_delay).unwrap_or(std::time::Duration::from_millis(1000));
                                         println!("Repaint is {:?}", repaint_after);
-                
+
                                         if rr.quit {
                                             control_flow = None;
                                         } else if repaint_after.is_zero() {
@@ -244,7 +244,7 @@ macro_rules! tracked_window {
                                         } else {
                                             control_flow = Some(egui_multiwin::async_winit::event_loop::ControlFlow::Wait);
                                         };
-                
+
                                         {
                                             let color = egui_multiwin::egui::Rgba::from_white_alpha(0.0);
                                             unsafe {
@@ -254,12 +254,12 @@ macro_rules! tracked_window {
                                                     .clear_color(color[0], color[1], color[2], color[3]);
                                                 self.egui.painter.gl().clear(glow::COLOR_BUFFER_BIT);
                                             }
-                
+
                                             // draw things behind egui here
                                             if let Some(window) = self.window.window_data() {
                                                 unsafe { window.opengl_before(c, self.egui.painter.gl()) };
                                             }
-                
+
                                             let prim = self.egui
                                                 .egui_ctx
                                                 .tessellate(full_output.shapes, self.egui.egui_ctx.pixels_per_point());
@@ -269,12 +269,12 @@ macro_rules! tracked_window {
                                                 &prim[..],
                                                 &full_output.textures_delta,
                                             );
-                
+
                                             // draw things on top of egui here
                                             if let Some(window) = self.window.window_data() {
                                                 unsafe { window.opengl_after(c, self.egui.painter.gl()) };
                                             }
-                
+
                                             gl_window.swap_buffers().unwrap();
                                         }
                                         Some(rr)
@@ -804,7 +804,10 @@ macro_rules! multi_window {
                     self.pending_windows.push(window);
                 }
 
-                async fn process_pending_windows(&mut self, elwt: &async_winit::event_loop::EventLoopWindowTarget) -> Result<(), DisplayCreationError> {
+                async fn process_pending_windows(&mut self, 
+                    elwt: &async_winit::event_loop::EventLoopWindowTarget,
+                    wclose: &egui_multiwin::future_set::FuturesHashSetFirst<()>,
+                ) -> Result<(), DisplayCreationError> {
                     while let Some(window) = self.pending_windows.pop() {
                         let twc = TrackedWindowContainer::create(
                             window.window_state,
@@ -818,6 +821,9 @@ macro_rules! multi_window {
                             &window.options,
                             window.viewport,
                         ).await?;
+                        wclose.get().add_future(async {
+                            println!("Im only waiting 3 seconds");
+                            tokio::time::sleep(tokio::time::Duration::from_millis(3000)).await });
                         self.windows.push(twc);
                     }
                     Ok(())
@@ -897,12 +903,15 @@ macro_rules! multi_window {
                     self.event_loop.take().unwrap().block_on(
                         async move {
                             println!("App startup");
-                            let e = self.process_pending_windows(&event_loop_window_target).await;
-                            println!("Window start returned {:?}", e);
-                            loop {
-                                event_loop_window_target.resumed().await;
-                                println!("Unknown status, looping infinitely");
-                            }
+                            event_loop_window_target.resumed().await;
+                            let mut wclose = egui_multiwin::future_set::FuturesHashSetFirst::new();
+                            self.process_pending_windows(&event_loop_window_target, &wclose).await;
+                            let w = wclose.get().add_future(async {
+                                println!("Im waiting 5 seconds");
+                                tokio::time::sleep(tokio::time::Duration::from_millis(5000)).await });
+                            wclose.clone().await;
+                            println!("Exiting?");
+                            event_loop_window_target.exit().await
                         })
                 }
             }
