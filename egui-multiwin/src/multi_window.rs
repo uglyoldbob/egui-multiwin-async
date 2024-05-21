@@ -811,9 +811,9 @@ macro_rules! multi_window {
                     self.pending_windows.push(window);
                 }
 
-                async fn process_pending_windows(&mut self, 
+                async fn process_pending_windows(&mut self,
                     elwt: &async_winit::event_loop::EventLoopWindowTarget<TS>,
-                    wclose: &egui_multiwin::future_set::FuturesHashSetFirst<()>,
+                    events: &mut egui_multiwin::Events,
                 ) -> Result<(), DisplayCreationError> {
                     while let Some(window) = self.pending_windows.pop() {
                         let twc = TrackedWindowContainer::create(
@@ -828,20 +828,35 @@ macro_rules! multi_window {
                             &window.options,
                             window.viewport,
                         ).await?;
+                        let twc = Arc::new(twc);
                         if let Some(s) = &twc.get_window_data() {
                             if s.is_root() {
-                                wclose.get().add_future(async move {
-                                    let w = twc.get_common().gl_window.window().close_requested().wait();
+                                let twc2 = twc.clone();
+                                events.window_close.get().add_future(async move {
+                                    let close = twc2.get_common().gl_window.window().close_requested().wait();
                                     println!("Waiting for window to close");
+                                    close.await;
+                                });
+                                let twc2 = twc.clone();
+                                events.repaint.get().add_future(async move {
+                                    let w = twc2.get_common().gl_window.window().redraw_requested().wait();
                                     w.await;
                                 });
                             }
                             else {
-                                todo!("Do something with twc")
+                                let twc2 = twc.clone();
+                                events.repaint.get().add_future(async move {
+                                    let w = twc2.get_common().gl_window.window().redraw_requested().wait();
+                                    w.await;
+                                });
                             }
                         }
                         else {
-                            todo!("Do something with twc")
+                            let twc2 = twc.clone();
+                            events.repaint.get().add_future(async move {
+                                let w = twc2.get_common().gl_window.window().redraw_requested().wait();
+                                w.await;
+                            });
                         }
                     }
                     Ok(())
@@ -852,7 +867,7 @@ macro_rules! multi_window {
                     mut self,
                     mut c: $common,
                 ) -> Result<(), EventLoopError> {
-                    let event_loop_window_target: async_winit::event_loop::EventLoopWindowTarget<TS> = 
+                    let event_loop_window_target: async_winit::event_loop::EventLoopWindowTarget<TS> =
                         self.event_loop
                             .as_ref()
                             .unwrap()
@@ -863,9 +878,9 @@ macro_rules! multi_window {
                         async move {
                             println!("App startup");
                             event_loop_window_target.resumed().await;
-                            let mut wclose = egui_multiwin::future_set::FuturesHashSetFirst::new();
-                            self.process_pending_windows(&event_loop_window_target, &wclose).await;
-                            wclose.clone().await;
+                            let mut events = egui_multiwin::Events::new();
+                            self.process_pending_windows(&event_loop_window_target, &mut events).await;
+                            events.window_close.clone().await;
                             println!("Exiting?");
                             event_loop_window_target.exit().await
                         })

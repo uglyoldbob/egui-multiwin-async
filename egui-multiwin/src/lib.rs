@@ -38,3 +38,21 @@ pub mod multi_window;
 pub mod tracked_window;
 
 pub mod future_set;
+
+/// Represents the events that we care about
+pub struct Events {
+    /// For root windows
+    pub window_close: future_set::FuturesHashSetAll<()>,
+    /// For all windows
+    pub repaint: future_set::FuturesHashSetFirst<()>,
+}
+
+impl Events {
+    /// Construct a new event handler
+    pub fn new() -> Self {
+        Self {
+            window_close: future_set::FuturesHashSetAll::new(),
+            repaint: future_set::FuturesHashSetFirst::new(),
+        }
+    }
+}
