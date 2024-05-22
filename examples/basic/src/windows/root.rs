@@ -1,6 +1,6 @@
 //! Code for the root window of the project.
 
-use std::time::Duration;
+use std::{sync::{Arc, Mutex}, time::Duration};
 
 use crate::egui_multiwin_dynamic::{
     multi_window::NewWindowRequest,
@@ -62,14 +62,15 @@ impl TrackedWindow for RootWindow {
 
     async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
         &mut self,
-        c: &mut AppCommon,
-        egui: &mut EguiGlow,
+        c: Arc<Mutex<AppCommon>>,
+        egui: Arc<Mutex<EguiGlow>>,
         _window: &egui_multiwin::async_winit::window::Window<TS>,
-        _clipboard: &mut egui_multiwin::arboard::Clipboard,
+        _clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
     ) -> RedrawResponse {
         let mut quit = false;
 
-        egui.egui_ctx
+        let egui_ctx = &egui.lock().unwrap().egui_ctx;
+        egui_ctx
             .request_repaint_after(Duration::from_millis(9500));
 
         let cur_time = std::time::Instant::now();
@@ -85,7 +86,7 @@ impl TrackedWindow for RootWindow {
 
         let mut windows_to_create = vec![];
 
-        egui_multiwin::egui::SidePanel::left("my_side_panel").show(&egui.egui_ctx, |ui| {
+        egui_multiwin::egui::SidePanel::left("my_side_panel").show(egui_ctx, |ui| {
             ui.heading("Hello World!");
             if ui.button("New popup").clicked() {
                 windows_to_create.push(PopupWindow::request(format!(
@@ -103,9 +104,9 @@ impl TrackedWindow for RootWindow {
                 quit = true;
             }
         });
-        egui_multiwin::egui::CentralPanel::default().show(&egui.egui_ctx, |ui| {
+        egui_multiwin::egui::CentralPanel::default().show(egui_ctx, |ui| {
             ui.label(format!("The fps is {}", self.fps.unwrap()));
-            ui.heading(format!("number {}", c.clicks));
+            ui.heading(format!("number {}", c.lock().unwrap().clicks));
             let t = egui_multiwin::egui::widget_text::RichText::new("Example custom font text");
             let t = t.font(FontId {
                 size: 12.0,
@@ -114,7 +115,7 @@ impl TrackedWindow for RootWindow {
             ui.label(t);
             ui.checkbox(&mut self.summon_groot, "summon groot");
             if self.summon_groot {
-                egui.egui_ctx.show_viewport_deferred(
+                egui_ctx.show_viewport_deferred(
                     egui_multiwin::egui::viewport::ViewportId::from_hash_of("Testing"),
                     egui_multiwin::egui::viewport::ViewportBuilder {
                         ..Default::default()

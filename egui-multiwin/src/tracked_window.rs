@@ -41,11 +41,17 @@ impl<T, TS: async_winit::ThreadSafety> ContextHolder<T, TS> {
             options,
         }
     }
-}
-impl<T, TS: async_winit::ThreadSafety> ContextHolder<T, TS> {
+
     /// Get the window handle
     pub fn window(&self) -> &async_winit::window::Window<TS> {
         &self.window
+    }
+
+    /// convenience function to call get_proc_address on the display of this struct
+    pub fn get_proc_address(&self, s: &str) -> *const std::ffi::c_void {
+        let cs: *const std::ffi::c_char = s.as_ptr().cast();
+        let cst = unsafe { std::ffi::CStr::from_ptr(cs) };
+        self.display.get_proc_address(cst)
     }
 }
 
@@ -79,13 +85,6 @@ impl<TS: async_winit::ThreadSafety> ContextHolder<PossiblyCurrentContext, TS> {
     /// Make a possibly current context current
     pub fn make_current(&self) -> glutin::error::Result<()> {
         self.context.make_current(&self.ws)
-    }
-
-    /// convenience function to call get_proc_address on the display of this struct
-    pub fn get_proc_address(&self, s: &str) -> *const std::ffi::c_void {
-        let cs: *const std::ffi::c_char = s.as_ptr().cast();
-        let cst = unsafe { std::ffi::CStr::from_ptr(cs) };
-        self.display.get_proc_address(cst)
     }
 }
 
