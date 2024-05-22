@@ -111,7 +111,7 @@ checksum = "175571dd1d178ced59193a6fc02dde1b972eb0bc56c892cde9beeceac5bf0f6b"
 [[package]]
 name = "async-winit"
 version = "0.2.1"
-source = "git+https://github.com/uglyoldbob/async-winit.git#9d07caebd33a0454d146419b05f73dc18c25ded6"
+source = "git+https://github.com/uglyoldbob/async-winit.git#a873eda55347ed4fece2b1c82968f7df914a17d1"
 dependencies = [
  "cfg-if",
  "cfg_aliases",
@@ -433,6 +433,7 @@ dependencies = [
  "async-winit",
  "egui",
  "log",
+ "raw-window-handle 0.5.2",
  "raw-window-handle 0.6.2",
  "web-time",
  "webbrowser",

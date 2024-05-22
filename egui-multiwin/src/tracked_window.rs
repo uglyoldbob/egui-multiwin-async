@@ -24,7 +24,7 @@ pub struct ContextHolder<T, TS: async_winit::ThreadSafety> {
     options: TrackedWindowOptions,
 }
 
-impl<T, TS: async_winit::ThreadSafety> ContextHolder<T, TS> {
+impl<T, TS: async_winit::ThreadSafety + Clone> ContextHolder<T, TS> {
     /// Create a new context holder
     pub fn new(
         context: T,
@@ -43,8 +43,8 @@ impl<T, TS: async_winit::ThreadSafety> ContextHolder<T, TS> {
     }
 
     /// Get the window handle
-    pub fn window(&self) -> &async_winit::window::Window<TS> {
-        &self.window
+    pub fn window(&self) -> async_winit::window::Window<TS> {
+        self.window.clone()
     }
 
     /// convenience function to call get_proc_address on the display of this struct
