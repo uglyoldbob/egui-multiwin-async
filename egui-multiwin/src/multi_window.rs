@@ -193,7 +193,7 @@ macro_rules! tracked_window {
                     let mut egui = self.egui.lock().unwrap();
                     // draw things behind egui here
                     if let Some(window) = self.window.window_data() {
-                        unsafe { window.lock().unwrap().opengl_before(c.to_owned(), egui.painter.gl()) };
+                        unsafe { window.lock().unwrap().opengl_before(c.to_owned(), egui.painter.gl()).await };
                     }
                 }
 
@@ -220,7 +220,7 @@ macro_rules! tracked_window {
                 ) {
                     let mut egui = self.egui.lock().unwrap();
                     if let Some(window) = self.window.window_data() {
-                        unsafe { window.lock().unwrap().opengl_after(c.to_owned(), egui.painter.gl()) };
+                        unsafe { window.lock().unwrap().opengl_after(c.to_owned(), egui.painter.gl()).await };
                     }
                 }
             }
@@ -243,7 +243,7 @@ macro_rules! tracked_window {
                 }
 
                 /// Perform a redraw of the window
-                pub async fn redraw(&mut self, 
+                pub async fn redraw(&mut self,
                     c: &std::sync::Arc<Mutex<$common>>,
                     clipboard: &std::sync::Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
                 )
@@ -260,7 +260,7 @@ macro_rules! tracked_window {
                                 rr = rr2;
                             }
                             let full_output = s.end_frame();
-    
+
                             if s.viewport_callback.is_none() {
                                 let mut remove_id = Vec::new();
                                 for id in viewportset.iter() {
@@ -277,7 +277,7 @@ macro_rules! tracked_window {
                                     rr.quit = true;
                                 }
                             }
-    
+
                             for (viewport_id, viewport_output) in &full_output.viewport_output {
                                 if viewport_id != &egui::viewport::ViewportId::ROOT && !viewportset.contains(viewport_id) {
                                     let builder = egui_multiwin::async_winit::window::WindowBuilder::new();
@@ -304,18 +304,18 @@ macro_rules! tracked_window {
                                     rr.new_windows.push(vp);
                                 }
                             }
-    
+
                             let vp_output = full_output
                                 .viewport_output
                                 .get(s.viewportid);
                             let repaint_after = vp_output.map(|v| v.repaint_delay).unwrap_or(std::time::Duration::from_millis(1000));
-    
+
                             {
                                 s.gl_clear();
                                 s.gl_before(&c).await;
                                 s.draw_main(full_output, &gl_window.window).await;
                                 s.gl_after(&c).await;
-    
+
                                 gl_window.swap_buffers().unwrap();
                             }
                             Some(rr)
@@ -606,11 +606,11 @@ macro_rules! tracked_window {
                 pub fn make_current(&mut self) {
                     match self {
                         IndeterminateWindowedContext::PossiblyCurrent(pc) => {
-                            pc.as_mut().unwrap().make_current();
+                            pc.as_mut().unwrap().make_current().unwrap();
                         }
                         IndeterminateWindowedContext::NotCurrent(nc) => {
                             let newc = nc.take().unwrap().make_current().unwrap();
-                            std::mem::replace(self, IndeterminateWindowedContext::PossiblyCurrent(Some(newc)));
+                            *self = IndeterminateWindowedContext::PossiblyCurrent(Some(newc));
                         }
                         IndeterminateWindowedContext::None => {}
                     };
@@ -666,7 +666,7 @@ macro_rules! multi_window {
             use egui_multiwin::egui;
 
             use super::tracked_window::{
-                CommonWindowData, DisplayCreationError, IndeterminateWindowedContext, 
+                CommonWindowData, DisplayCreationError, IndeterminateWindowedContext,
                 TrackedWindow, TrackedWindowContainer,
             };
 
@@ -745,7 +745,7 @@ macro_rules! multi_window {
                     self.pending_windows.push(window);
                 }
 
-                fn init_egui(
+                async fn init_egui(
                     fontmap: &HashMap<String, egui_multiwin::egui::FontData>,
                     twc: &mut TrackedWindowContainer<TS>,
                     elwt: &async_winit::event_loop::EventLoopWindowTarget<TS>,
@@ -781,7 +781,7 @@ macro_rules! multi_window {
                     };
                     egui.egui_ctx.set_embed_viewports(false);
                     twc.common_mut().egui = Some(Arc::new(Mutex::new(egui)));
-                    twc.check_viewport_builder();
+                    twc.check_viewport_builder().await;
                 }
 
                 async fn process_pending_windows(&mut self,
@@ -823,7 +823,7 @@ macro_rules! multi_window {
                                 {
                                     let mut twc5 = twc4.lock().unwrap();
                                     println!("I am groot 2");
-                                    Self::init_egui(&fonts, &mut *twc5, &elwt2);
+                                    Self::init_egui(&fonts, &mut *twc5, &elwt2).await;
                                     println!("I am groot 3");
                                 };
                                 println!("About to enter draw loop for window");

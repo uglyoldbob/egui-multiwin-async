@@ -1,6 +1,9 @@
 //! Code for the root window of the project.
 
-use std::{sync::{Arc, Mutex}, time::Duration};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use crate::egui_multiwin_dynamic::{
     multi_window::NewWindowRequest,
@@ -71,8 +74,7 @@ impl TrackedWindow for RootWindow {
         let mut quit = false;
 
         let egui_ctx = &egui.lock().unwrap().egui_ctx;
-        egui_ctx
-            .request_repaint_after(Duration::from_millis(9500));
+        egui_ctx.request_repaint_after(Duration::from_millis(9500));
 
         let cur_time = std::time::Instant::now();
         let delta = cur_time.duration_since(self.prev_time);
