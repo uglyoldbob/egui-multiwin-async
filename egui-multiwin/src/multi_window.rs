@@ -141,6 +141,7 @@ macro_rules! tracked_window {
                 async fn begin_frame<TS: egui_multiwin::async_winit::ThreadSafety>(&mut self, window: &egui_multiwin::async_winit::window::Window<TS>) {
                     let mut egui = self.egui.lock().unwrap();
                     let input = egui.egui_winit.take_egui_input(window).await;
+                    println!("Input is {:?}", input);
                     egui.egui_ctx.begin_frame(input);
                 }
 
@@ -749,6 +750,7 @@ macro_rules! multi_window {
                     fontmap: &HashMap<String, egui_multiwin::egui::FontData>,
                     twc: &mut TrackedWindowContainer<TS>,
                     elwt: &async_winit::event_loop::EventLoopWindowTarget<TS>,
+                    window: &mut egui_multiwin::async_winit::window::Window<TS>,
                 ) {
                     let gl = {
                         let gl_window = twc.gl_window_mut();
@@ -765,7 +767,7 @@ macro_rules! multi_window {
                         use glow::HasContext as _;
                         gl.enable(glow::FRAMEBUFFER_SRGB);
                     }
-                    let egui = {
+                    let mut egui = {
                         let common = twc.common_mut();
                         let egui = egui_glow_async::EguiGlow::new(elwt, gl, common.shader, None);
                         let mut fonts = egui::FontDefinitions::default();
@@ -780,6 +782,7 @@ macro_rules! multi_window {
                         egui
                     };
                     egui.egui_ctx.set_embed_viewports(false);
+                    egui.egui_winit.register_event_handlers(window);
                     twc.common_mut().egui = Some(Arc::new(Mutex::new(egui)));
                     twc.check_viewport_builder().await;
                 }
@@ -818,12 +821,12 @@ macro_rules! multi_window {
                             let close = glw3.close_requested().wait();
                             let twc4 = twc2.clone();
                             let draw = async move {
-                                let glw2 = glw.clone();
+                                let mut glw2 = glw.clone();
                                 println!("Drawing window for the first time, init egui");
                                 {
                                     let mut twc5 = twc4.lock().unwrap();
                                     println!("I am groot 2");
-                                    Self::init_egui(&fonts, &mut *twc5, &elwt2).await;
+                                    Self::init_egui(&fonts, &mut *twc5, &elwt2, &mut glw2).await;
                                     println!("I am groot 3");
                                 };
                                 println!("About to enter draw loop for window");
