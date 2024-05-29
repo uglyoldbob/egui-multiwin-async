@@ -30,7 +30,7 @@ pub struct AppCommon {
 #[tokio::main]
 async fn main() {
     println!("Startup 1");
-    let mut multi_window: MultiWindow<egui_multiwin::async_winit::DefaultThreadSafety> =
+    let mut multi_window: MultiWindow =
         MultiWindow::new();
     println!("Startup 2");
     multi_window.add_font(

@@ -1,6 +1,7 @@
 //! This module covers definition and functionality for an individual window.
 
 use std::num::NonZeroU32;
+use std::sync::Arc;
 
 use egui::NumExt;
 use glutin::context::{NotCurrentContext, PossiblyCurrentContext};
@@ -15,7 +16,7 @@ pub struct ContextHolder<T, TS: async_winit::ThreadSafety> {
     /// The context being held
     context: T,
     /// The window
-    pub window: async_winit::window::Window<TS>,
+    pub window: Arc<async_winit::window::Window<TS>>,
     /// The window surface
     ws: glutin::surface::Surface<WindowSurface>,
     /// The display
@@ -35,7 +36,7 @@ impl<T, TS: async_winit::ThreadSafety + Clone> ContextHolder<T, TS> {
     ) -> Self {
         Self {
             context,
-            window,
+            window: Arc::new(window),
             ws,
             display,
             options,
@@ -43,7 +44,7 @@ impl<T, TS: async_winit::ThreadSafety + Clone> ContextHolder<T, TS> {
     }
 
     /// Get the window handle
-    pub fn window(&self) -> async_winit::window::Window<TS> {
+    pub fn window(&self) -> Arc<async_winit::window::Window<TS>> {
         self.window.clone()
     }
 
