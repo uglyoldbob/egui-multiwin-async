@@ -323,7 +323,8 @@ macro_rules! tracked_window {
                                 s.draw_main(full_output, &gl_window.window).await;
                                 s.gl_after(&c).await;
 
-                                gl_window.swap_buffers().unwrap();
+                                let e = gl_window.swap_buffers();
+                                println!("Swap buffers returned {:?}", e);
                             }
                             Some(rr)
                         };
@@ -831,6 +832,7 @@ macro_rules! multi_window {
                             let twc4 = twc2.clone();
                             let draw = async move {
                                 let mut glw2 = glw.clone();
+                                glw.request_redraw();
                                 println!("Drawing window for the first time, init egui");
                                 {
                                     let mut twc5 = twc4.lock().unwrap();
