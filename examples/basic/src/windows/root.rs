@@ -70,7 +70,6 @@ impl TrackedWindow for RootWindow {
         _window: &egui_multiwin::async_winit::window::Window<TS>,
         _clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
     ) -> RedrawResponse {
-        println!("App redraw root window");
         let mut quit = false;
 
         let egui_ctx = &egui.lock().unwrap().egui_ctx;

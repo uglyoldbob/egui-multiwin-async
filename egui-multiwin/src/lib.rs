@@ -32,7 +32,7 @@
 
 pub use {
     arboard, async_winit, egui, egui_glow_async, enum_dispatch, futures_lite, glutin,
-    raw_window_handle_5, raw_window_handle_6, thiserror,
+    rand, raw_window_handle_5, raw_window_handle_6, thiserror,
 };
 pub mod multi_window;
 pub mod tracked_window;
@@ -55,4 +55,9 @@ impl Events {
             non_root_windows: future_set::FuturesHashSet::new(),
         }
     }
+}
+
+lazy_static::lazy_static! {
+    /// Mutex used for drawing
+    pub static ref DRAW_MUTEX: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
 }

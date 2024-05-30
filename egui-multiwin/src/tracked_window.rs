@@ -87,6 +87,19 @@ impl<TS: async_winit::ThreadSafety> ContextHolder<PossiblyCurrentContext, TS> {
     pub fn make_current(&self) -> glutin::error::Result<()> {
         self.context.make_current(&self.ws)
     }
+
+    /// Make a possibly current context not-current
+    pub fn make_not_current(self) -> Result<ContextHolder<NotCurrentContext, TS>, glutin::error::Error> {
+        let c = self.context.make_not_current().unwrap();
+        let s = ContextHolder::<NotCurrentContext, TS> {
+            context: c,
+            window: self.window,
+            ws: self.ws,
+            display: self.display,
+            options: self.options,
+        };
+        Ok(s)
+    }
 }
 
 impl<TS: async_winit::ThreadSafety> ContextHolder<NotCurrentContext, TS> {
