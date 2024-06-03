@@ -30,8 +30,7 @@ pub struct AppCommon {
 #[tokio::main]
 async fn main() {
     println!("Startup 1");
-    let mut multi_window: MultiWindow =
-        MultiWindow::new();
+    let mut multi_window: MultiWindow = MultiWindow::new();
     println!("Startup 2");
     multi_window.add_font(
         "computermodern".to_string(),

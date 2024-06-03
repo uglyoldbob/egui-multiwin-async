@@ -116,13 +116,13 @@ impl TrackedWindow for PopupWindow {
     async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
         &mut self,
         c: Arc<Mutex<AppCommon>>,
-        egui: Arc<Mutex<EguiGlow>>,
+        egui: &mut EguiGlow,
         window: &egui_multiwin::async_winit::window::Window<TS>,
         _clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
     ) -> RedrawResponse {
         let mut quit = false;
 
-        let egui_ctx = &egui.lock().unwrap().egui_ctx;
+        let egui_ctx = &egui.egui_ctx;
         egui_multiwin::egui::CentralPanel::default()
             .show_async(egui_ctx, |ui| async move {
                 use std::ops::DerefMut;

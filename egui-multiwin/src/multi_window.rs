@@ -70,7 +70,7 @@ macro_rules! tracked_window {
                 async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
                     &mut self,
                     c: Arc<Mutex<$common>>,
-                    egui: Arc<Mutex<EguiGlow>>,
+                    egui: &mut EguiGlow,
                     window: &egui_multiwin::async_winit::window::Window<TS>,
                     clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
                 ) -> RedrawResponse;
@@ -125,7 +125,7 @@ macro_rules! tracked_window {
             /// This structure is for dispatching events
             pub struct TrackedWindowContainerInstance<'a> {
                 /// The egui reference
-                egui: &'a Arc<Mutex<EguiGlow>>,
+                egui: &'a mut EguiGlow,
                 /// The window differences
                 window: WindowInstanceThings,
                 /// The viewport set
@@ -141,14 +141,16 @@ macro_rules! tracked_window {
             impl<'a> TrackedWindowContainerInstance<'a> {
                 /// Take input and run egui begin_frame
                 async fn begin_frame<TS: egui_multiwin::async_winit::ThreadSafety>(&mut self, window: &egui_multiwin::async_winit::window::Window<TS>) {
-                    let mut egui = self.egui.lock().unwrap();
-                    let input = egui.egui_winit.lock().unwrap().take_egui_input(window).await;
+                    let mut egui = &mut self.egui;
+                    let mut l = egui.egui_winit.lock();
+                    let input = l.take_egui_input(window).await;
+                    drop(l);
                     egui.egui_ctx.begin_frame(input);
                 }
 
                 /// run egui end_frame
                 fn end_frame(&mut self) -> egui::FullOutput {
-                    let mut egui = self.egui.lock().unwrap();
+                    let mut egui = &mut self.egui;
                     egui.egui_ctx.end_frame()
                 }
 
@@ -159,12 +161,12 @@ macro_rules! tracked_window {
                     clipboard: std::sync::Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
                 ) -> Option<RedrawResponse> {
                     if let Some(cb) = self.viewport_callback {
-                        let egui = self.egui.lock().unwrap();
+                        let egui = &self.egui;
                         cb(&egui.egui_ctx);
                         None
                     }
                     else if let Some(window_data) = self.window.window_data() {
-                        Some(window_data.lock().unwrap().redraw(c.to_owned(), self.egui.to_owned(), window, clipboard).await)
+                        Some(window_data.lock().unwrap().redraw(c.to_owned(), &mut self.egui, window, clipboard).await)
                     }
                     else {
                         None
@@ -174,7 +176,7 @@ macro_rules! tracked_window {
                 /// Clear the window by filling the window with transparency
                 fn gl_clear(&mut self) {
                     let color = egui_multiwin::egui::Rgba::from_white_alpha(0.0);
-                    let mut egui = self.egui.lock().unwrap();
+                    let mut egui = &mut self.egui;
                     unsafe {
                         use glow::HasContext as _;
                         egui.painter
@@ -188,7 +190,7 @@ macro_rules! tracked_window {
                 async fn gl_before(&mut self,
                     c: &std::sync::Arc<Mutex<$common>>,
                 ) {
-                    let mut egui = self.egui.lock().unwrap();
+                    let mut egui = &mut self.egui;
                     // draw things behind egui here
                     if let Some(window) = self.window.window_data() {
                         unsafe { window.lock().unwrap().opengl_before(c.to_owned(), egui.painter.gl()).await };
@@ -199,7 +201,7 @@ macro_rules! tracked_window {
                     full_output: egui::FullOutput,
                     window: &egui_multiwin::async_winit::window::Window<TS>,
                 ) {
-                    let mut egui = self.egui.lock().unwrap();
+                    let mut egui = &mut self.egui;
                     let ppp = egui.egui_ctx.pixels_per_point();
                     let prim = egui
                         .egui_ctx
@@ -216,7 +218,7 @@ macro_rules! tracked_window {
                 async fn gl_after(&mut self,
                     c: &std::sync::Arc<Mutex<$common>>,
                 ) {
-                    let mut egui = self.egui.lock().unwrap();
+                    let mut egui = &mut self.egui;
                     if let Some(window) = self.window.window_data() {
                         unsafe { window.lock().unwrap().opengl_after(c.to_owned(), egui.painter.gl()).await };
                     }
@@ -246,8 +248,7 @@ macro_rules! tracked_window {
                     clipboard: &std::sync::Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
                 )
                 {
-                    self.gl_window_mut().make_current();
-                    let gl_window = self.gl_window();
+                    let mut gl_window = self.gl_window_option().take().unwrap().make_current();
                     if let Some(mut s) = self.prepare_for_events() {
                         let mut viewportset = s.viewportset.lock().unwrap();
                         let redraw_thing = {
@@ -319,16 +320,16 @@ macro_rules! tracked_window {
                             Some(rr)
                         };
                     }
-                    self.gl_window_mut().make_not_current();
+                    self.gl_window_option().replace(gl_window.make_not_current());
                 }
             }
 
             /// The common data for all window types
             pub struct CommonWindowData<TS: egui_multiwin::async_winit::ThreadSafety> {
                 /// The context for the window
-                pub gl_window: IndeterminateWindowedContext<TS>,
+                pub gl_window: Option<IndeterminateWindowedContext<TS>>,
                 /// The egui instance for this window, each window has a separate egui instance.
-                pub egui: Option<Arc<Mutex<EguiGlow>>>,
+                pub egui: Option<EguiGlow>,
                 /// The viewport set
                 viewportset: Arc<Mutex<ViewportIdSet>>,
                 /// The viewport id for the window
@@ -364,8 +365,8 @@ macro_rules! tracked_window {
                     if let Some(vb) = &common.vb {
                         let gl_window = self.gl_window();
                         egui_multiwin::egui_glow_async::egui_async_winit::apply_viewport_builder_to_window(
-                            &common.egui.as_ref().unwrap().lock().unwrap().egui_ctx,
-                            &gl_window.window(),
+                            &common.egui.as_ref().unwrap().egui_ctx,
+                            &gl_window.unwrap().window(),
                             vb,
                         ).await;
                     }
@@ -396,18 +397,26 @@ macro_rules! tracked_window {
                 }
 
                 /// Get the gl window for the container
-                pub fn gl_window(&self) -> &IndeterminateWindowedContext<TS> {
+                pub fn gl_window(&self) -> Option<&IndeterminateWindowedContext<TS>> {
                     match self {
-                        Self::PlainWindow(w) => &w.common.gl_window,
-                        Self::Viewport(w) => &w.common.gl_window,
+                        Self::PlainWindow(w) => w.common.gl_window.as_ref(),
+                        Self::Viewport(w) => w.common.gl_window.as_ref(),
+                    }
+                }
+
+                /// Get the gl_window option
+                pub fn gl_window_option(&mut self) -> &mut Option<IndeterminateWindowedContext<TS>> {
+                    match self {
+                        Self::PlainWindow(w) => &mut w.common.gl_window,
+                        Self::Viewport(w) => &mut w.common.gl_window,
                     }
                 }
 
                 /// Get the gl window, mutably for the container
-                pub fn gl_window_mut(&mut self) -> &mut IndeterminateWindowedContext<TS> {
+                pub fn gl_window_mut(&mut self) -> Option<&mut IndeterminateWindowedContext<TS>> {
                     match self {
-                        Self::PlainWindow(w) => &mut w.common.gl_window,
-                        Self::Viewport(w) => &mut w.common.gl_window,
+                        Self::PlainWindow(w) => w.common.gl_window.as_mut(),
+                        Self::Viewport(w) => w.common.gl_window.as_mut(),
                     }
                 }
 
@@ -458,15 +467,15 @@ macro_rules! tracked_window {
                                 let wcommon = CommonWindowData {
                                     viewportid: viewportid.to_owned(),
                                     viewportset: viewportset.clone(),
-                                    gl_window: IndeterminateWindowedContext::NotCurrent(
-                                        Some(egui_multiwin::tracked_window::ContextHolder::new(
+                                    gl_window: Some(IndeterminateWindowedContext::NotCurrent(
+                                        egui_multiwin::tracked_window::ContextHolder::new(
                                             gl_window,
                                             winitwindow,
                                             ws,
                                             display,
                                             *options,
-                                        ))
-                                    ),
+                                        )
+                                    )),
                                     vb,
                                     viewportcb,
                                     egui: None,
@@ -492,35 +501,11 @@ macro_rules! tracked_window {
                     panic!("No window created");
                 }
 
-                /// Returns true if the specified event is for this window. A UserEvent (one generated by the EventLoopProxy) is not for any window.
-                pub fn is_event_for_window(&self, event: &async_winit::event::Event<TS>) -> bool {
-                    // Check if the window ID matches, if not then this window can pass on the event.
-                    match (event, self.gl_window()) {
-                        (
-                            Event::WindowEvent {
-                                window_id: id,
-                                event: _,
-                                ..
-                            },
-                            IndeterminateWindowedContext::PossiblyCurrent(gl_window),
-                        ) => gl_window.as_ref().unwrap().window.id() == *id,
-                        (
-                            Event::WindowEvent {
-                                window_id: id,
-                                event: _,
-                                ..
-                            },
-                            IndeterminateWindowedContext::NotCurrent(gl_window),
-                        ) => gl_window.as_ref().unwrap().window.id() == *id,
-                        _ => true, // we weren't able to check the window ID, maybe this window is not initialized yet. we should run it.
-                    }
-                }
-
                 /// Build an instance that can have events dispatched to it
-                fn prepare_for_events(&self) -> Option<TrackedWindowContainerInstance> {
+                fn prepare_for_events(&mut self) -> Option<TrackedWindowContainerInstance> {
                     match self {
                         Self::PlainWindow(w) => {
-                            if let Some(egui) = &w.common.egui {
+                            if let Some(egui) = &mut w.common.egui {
                                 let w2 = WindowInstanceThings::PlainWindow { window: w.window.clone(), };
                                 Some(TrackedWindowContainerInstance { egui,
                                     window: w2,
@@ -535,7 +520,7 @@ macro_rules! tracked_window {
                             }
                         }
                         Self::Viewport(w) => {
-                            if let Some(egui) = &w.common.egui {
+                            if let Some(egui) = &mut w.common.egui {
                                 let w2 = WindowInstanceThings::Viewport { b: 42, };
                                 Some(TrackedWindowContainerInstance { egui,
                                     window: w2,
@@ -557,7 +542,7 @@ macro_rules! tracked_window {
                         Self::PlainWindow(w) => {
                             if w.window.lock().unwrap().can_quit(c) {
                                 if let Some(egui) = &mut w.common.egui {
-                                    egui.lock().unwrap().destroy();
+                                    egui.destroy();
                                 }
                             }
                         }
@@ -571,9 +556,9 @@ macro_rules! tracked_window {
             /// Enum of the potential options for a window context
             pub enum IndeterminateWindowedContext<TS: egui_multiwin::async_winit::ThreadSafety> {
                 /// The window context is possibly current
-                PossiblyCurrent(Option<ContextHolder<PossiblyCurrentContext, TS>>),
+                PossiblyCurrent(ContextHolder<PossiblyCurrentContext, TS>),
                 /// The window context is not current
-                NotCurrent(Option<ContextHolder<NotCurrentContext, TS>>),
+                NotCurrent(ContextHolder<NotCurrentContext, TS>),
                 /// The window context is empty
                 None,
             }
@@ -582,8 +567,8 @@ macro_rules! tracked_window {
                 /// Get the window handle
                 pub fn window(&self) -> Arc<async_winit::window::Window<TS>> {
                     match self {
-                        IndeterminateWindowedContext::PossiblyCurrent(pc) => pc.as_ref().unwrap().window(),
-                        IndeterminateWindowedContext::NotCurrent(nc) => nc.as_ref().unwrap().window(),
+                        IndeterminateWindowedContext::PossiblyCurrent(pc) => pc.window(),
+                        IndeterminateWindowedContext::NotCurrent(nc) => nc.window(),
                         IndeterminateWindowedContext::None => panic!("No window"),
                     }
                 }
@@ -591,45 +576,49 @@ macro_rules! tracked_window {
                 /// Get the proc address from glutin
                 pub fn get_proc_address(&self, s: &str) -> *const std::ffi::c_void {
                     match self {
-                        IndeterminateWindowedContext::PossiblyCurrent(pc) => pc.as_ref().unwrap().get_proc_address(s),
-                        IndeterminateWindowedContext::NotCurrent(nc) => nc.as_ref().unwrap().get_proc_address(s),
+                        IndeterminateWindowedContext::PossiblyCurrent(pc) => pc.get_proc_address(s),
+                        IndeterminateWindowedContext::NotCurrent(nc) => nc.get_proc_address(s),
                         IndeterminateWindowedContext::None => panic!("No window"),
                     }
                 }
 
                 /// Attempt to make the current context current
-                pub fn make_current(&mut self) {
+                pub fn make_current(self) -> Self {
                     match self {
-                        IndeterminateWindowedContext::PossiblyCurrent(pc) => {
-                            pc.as_mut().unwrap().make_current().unwrap();
+                        IndeterminateWindowedContext::PossiblyCurrent(mut pc) => {
+                            pc.make_current();
+                            IndeterminateWindowedContext::PossiblyCurrent(pc)
                         }
-                        IndeterminateWindowedContext::NotCurrent(nc) => {
-                            let newc = nc.take().unwrap().make_current().unwrap();
-                            *self = IndeterminateWindowedContext::PossiblyCurrent(Some(newc));
+                        IndeterminateWindowedContext::NotCurrent(mut nc) => {
+                            let c = nc.make_current().unwrap();
+                            IndeterminateWindowedContext::PossiblyCurrent(c)
                         }
-                        IndeterminateWindowedContext::None => {}
-                    };
-
+                        IndeterminateWindowedContext::None => {
+                            IndeterminateWindowedContext::None
+                        }
+                    }
                 }
 
                 /// Make the current context not current
-                pub fn make_not_current(&mut self) {
+                pub fn make_not_current(self) -> Self {
                     match self {
-                        IndeterminateWindowedContext::PossiblyCurrent(pc) => {
-                            let newc = pc.take().unwrap().make_not_current().unwrap();
-                            *self = IndeterminateWindowedContext::NotCurrent(Some(newc));
+                        IndeterminateWindowedContext::PossiblyCurrent(mut pc) => {
+                            let newc = pc.make_not_current().unwrap();
+                            IndeterminateWindowedContext::NotCurrent(newc)
                         }
                         IndeterminateWindowedContext::NotCurrent(nc) => {
-                            
+                            IndeterminateWindowedContext::NotCurrent(nc)
                         }
-                        IndeterminateWindowedContext::None => {}
-                    };
+                        IndeterminateWindowedContext::None => {
+                            IndeterminateWindowedContext::None
+                        }
+                    }
                 }
 
                 /// Get a possibly current context
                 pub fn context(&self) -> Option<&ContextHolder<PossiblyCurrentContext, TS>> {
                     match self {
-                        IndeterminateWindowedContext::PossiblyCurrent(pc) => Some(pc.as_ref().unwrap()),
+                        IndeterminateWindowedContext::PossiblyCurrent(pc) => Some(pc),
                         IndeterminateWindowedContext::NotCurrent(nc) => None,
                         IndeterminateWindowedContext::None => None,
                     }
@@ -760,16 +749,12 @@ macro_rules! multi_window {
                     elwt: &async_winit::event_loop::EventLoopWindowTarget<async_winit::ThreadSafe>,
                     window: &Arc<egui_multiwin::async_winit::window::Window<async_winit::ThreadSafe>>,
                 ) {
-                    let gl = {
-                        let gl_window = twc.gl_window_mut();
-                        gl_window.make_current();
-
-                        Arc::new(unsafe {
-                            glow::Context::from_loader_function(|s| {
-                                gl_window.get_proc_address(s)
-                            })
+                    let gl_window = twc.gl_window_option().take().unwrap().make_current();
+                    let gl = Arc::new(unsafe {
+                        glow::Context::from_loader_function(|s| {
+                            gl_window.get_proc_address(s)
                         })
-                    };
+                    });
 
                     unsafe {
                         use glow::HasContext as _;
@@ -789,9 +774,10 @@ macro_rules! multi_window {
                         egui.egui_ctx.set_fonts(fonts);
                         egui
                     };
+                    twc.gl_window_option().replace(gl_window);
                     egui.egui_ctx.set_embed_viewports(false);
                     egui_multiwin::egui_glow_async::egui_async_winit::State::register_event_handlers(&egui.egui_winit, window);
-                    twc.common_mut().egui = Some(Arc::new(Mutex::new(egui)));
+                    twc.common_mut().egui = Some(egui);
                     twc.check_viewport_builder().await;
                 }
 
@@ -823,38 +809,44 @@ macro_rules! multi_window {
                             let id : usize = egui_multiwin::rand::Rng::gen(&mut egui_multiwin::rand::thread_rng());
                             let glw = {
                                 let twc3 = twc2.lock().unwrap();
-                                twc3.get_common().gl_window.window()
+                                twc3.get_common().gl_window.as_ref().unwrap().window()
                             };
                             let glw3 = glw.clone();
-                            glw3.close_requested().wait_direct(move |a| { 
-                                println!("Close window {}", id);
-                                false
-                            });
                             let close = glw3.close_requested().wait();
+                            let (t, mut r) = egui_multiwin::async_channel::bounded(10);
+                            let (t2, mut r2) = egui_multiwin::async_channel::bounded(10);
+                            let ta = t.clone();
+                            glw3.close_requested().wait_direct_async(move |a| {
+                                let t = ta.clone();
+                                async move {
+                                    t.send(true).await.unwrap();
+                                    println!("Close window {}", id);
+                                    false
+                                }
+                            });
+                            // This runs the drawing on the proper thread, preventing async-winit from trying to run two draw events at the same time
+                            glw3.redraw_requested().wait_direct_async(move |c| {
+                                let t = t.clone();
+                                let r2 = r2.clone();
+                                async move {
+                                    t.send(true).await.unwrap();
+                                    let a: bool = r2.recv().await.unwrap();
+                                    true
+                                }
+                            });
                             let twc4 = twc2.clone();
                             let draw = async move {
                                 let mut glw2 = glw.clone();
-                                glw.request_redraw();
                                 {
                                     let mut twc5 = twc4.lock().unwrap();
                                     Self::init_egui(&fonts, &mut *twc5, &elwt2, &mut glw2).await;
                                 };
                                 loop {
-                                    glw2.redraw_requested().wait().await;
-                                    loop
-                                    {
-                                        let a = egui_multiwin::DRAW_MUTEX.try_lock();
-                                        if let Ok(mut a) = a {
-                                            *a = true;
-                                            let mut t = twc4.lock().unwrap();
-                                            t.redraw(&c2, &clipboard).await;
-                                            drop(t);
-                                            *a = false;
-                                            break;
-                                        }
-                                        tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
-                                    }
-                                    println!("Done drawing");
+                                    let a = r.recv().await.unwrap();
+                                    let mut t = twc4.lock().unwrap();
+                                    t.redraw(&c2, &clipboard).await;
+                                    drop(t);
+                                    t2.send(true).await.unwrap();
                                 }
                             };
                             use egui_multiwin::futures_lite::FutureExt;
@@ -895,6 +887,7 @@ macro_rules! multi_window {
                             self.process_pending_windows(c, &event_loop_window_target, &mut events).await.unwrap();
                             let mut wc = events.window_close.clone();
                             let mut oc = events.non_root_windows.clone();
+                            egui_multiwin::deadlock().await;
                             loop {
                                 tokio::select! {
                                     _ = &mut wc => { println!("All the root windows closed"); break; }
@@ -902,6 +895,7 @@ macro_rules! multi_window {
                                 }
                             }
                             println!("Waiting for program to exit");
+                            drop(oc);
                             event_loop_window_target.set_exit();
                             let w = e.await;
                             println!("Program exiting now");

@@ -66,13 +66,13 @@ impl TrackedWindow for RootWindow {
     async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
         &mut self,
         c: Arc<Mutex<AppCommon>>,
-        egui: Arc<Mutex<EguiGlow>>,
+        egui: &mut EguiGlow,
         _window: &egui_multiwin::async_winit::window::Window<TS>,
         _clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
     ) -> RedrawResponse {
         let mut quit = false;
 
-        let egui_ctx = &egui.lock().unwrap().egui_ctx;
+        let egui_ctx = &egui.egui_ctx;
         egui_ctx.request_repaint_after(Duration::from_millis(95));
 
         let cur_time = std::time::Instant::now();

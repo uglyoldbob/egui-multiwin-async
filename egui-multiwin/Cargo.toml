@@ -15,12 +15,14 @@ serde = ["egui/serde"]
 [dependencies]
 arboard = "3.3.2"
 async-winit = {git = "https://github.com/uglyoldbob/async-winit.git"}
+async-channel = "2.3.1"
 egui = { path = "/home/thomas/egui/crates/egui", features = ["async"] }
 egui_glow_async = { path = "/home/thomas/egui/crates/egui_glow_async", features = ["rwh_05", "winit", "links"]}
 enum_dispatch = "0.3.13"
 futures-lite = "2.3.0"
 glutin = "0.31.3"
 lazy_static = "1.4.0"
+rust-mutex = { git = "https://github.com/uglyoldbob/rust-mutex.git" }
 rand = "0.8.5"
 raw-window-handle-6 = { package = "raw-window-handle", version = "0.6.0" }
 raw-window-handle-5 = { package = "raw-window-handle", version = "0.5.2" }

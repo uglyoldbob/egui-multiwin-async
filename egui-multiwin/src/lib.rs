@@ -31,8 +31,8 @@
 #![deny(clippy::missing_docs_in_private_items)]
 
 pub use {
-    arboard, async_winit, egui, egui_glow_async, enum_dispatch, futures_lite, glutin,
-    rand, raw_window_handle_5, raw_window_handle_6, thiserror,
+    arboard, async_channel, async_winit, egui, egui_glow_async, enum_dispatch, futures_lite,
+    glutin, rand, raw_window_handle_5, raw_window_handle_6, thiserror,
 };
 pub mod multi_window;
 pub mod tracked_window;
@@ -59,5 +59,31 @@ impl Events {
 
 lazy_static::lazy_static! {
     /// Mutex used for drawing
-    pub static ref DRAW_MUTEX: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
+    pub static ref DRAW_MUTEX: tokio::sync::Mutex<bool> = tokio::sync::Mutex::new(false);
+}
+
+/// Peridocially check for mutex deadlocks
+pub async fn deadlock() {
+    use rust_mutex::parking_lot::deadlock;
+    use std::thread;
+    use std::time::Duration;
+    tokio::spawn(async {
+        loop {
+            thread::sleep(Duration::from_secs(10));
+            let deadlocks = deadlock::check_deadlock();
+            if deadlocks.is_empty() {
+                continue;
+            }
+
+            println!("{} deadlocks detected", deadlocks.len());
+            for (i, threads) in deadlocks.iter().enumerate() {
+                println!("Deadlock #{}", i);
+                for t in threads {
+                    println!("Thread Id {:#?}", t.thread_id());
+                    println!("{:#?}", t.backtrace());
+                }
+            }
+            println!("End of deadlocks detected");
+        }
+    });
 }
