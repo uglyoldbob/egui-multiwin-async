@@ -22,7 +22,6 @@ enum_dispatch = "0.3.13"
 futures-lite = "2.3.0"
 glutin = "0.31.3"
 lazy_static = "1.4.0"
-rust-mutex = { git = "https://github.com/uglyoldbob/rust-mutex.git" }
 rand = "0.8.5"
 raw-window-handle-6 = { package = "raw-window-handle", version = "0.6.0" }
 raw-window-handle-5 = { package = "raw-window-handle", version = "0.5.2" }

@@ -933,7 +933,6 @@ macro_rules! multi_window {
                             println!("Done processing initial windows");
                             let mut wc = events.window_close.clone();
                             let mut oc = events.non_root_windows.clone();
-                            let dead = egui_multiwin::deadlock;
                             let pend = Self::get_pending_window;
                             loop {
                                 tokio::select! {
@@ -948,7 +947,6 @@ macro_rules! multi_window {
                                             ).await.unwrap();
                                         }
                                     }
-                                    _ = dead() => {}
                                 }
                             }
                             println!("Waiting for program to exit");

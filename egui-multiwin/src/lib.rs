@@ -62,23 +62,3 @@ lazy_static::lazy_static! {
     pub static ref DRAW_MUTEX: tokio::sync::Mutex<bool> = tokio::sync::Mutex::new(false);
 }
 
-/// Peridocially check for mutex deadlocks
-pub async fn deadlock() {
-    use rust_mutex::parking_lot::deadlock;
-    use std::time::Duration;
-    tokio::time::sleep(Duration::from_secs(10)).await;
-    let deadlocks = deadlock::check_deadlock();
-    if deadlocks.is_empty() {
-        return;
-    }
-
-    println!("{} deadlocks detected", deadlocks.len());
-    for (i, threads) in deadlocks.iter().enumerate() {
-        println!("Deadlock #{}", i);
-        for t in threads {
-            println!("Thread Id {:#?}", t.thread_id());
-            println!("{:#?}", t.backtrace());
-        }
-    }
-    println!("End of deadlocks detected");
-}
