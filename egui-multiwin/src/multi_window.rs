@@ -888,11 +888,12 @@ macro_rules! multi_window {
                             self.process_pending_windows(c, &event_loop_window_target, &mut events).await.unwrap();
                             let mut wc = events.window_close.clone();
                             let mut oc = events.non_root_windows.clone();
-                            egui_multiwin::deadlock().await;
+                            let dead = egui_multiwin::deadlock;
                             loop {
                                 tokio::select! {
                                     _ = &mut wc => { println!("All the root windows closed"); break; }
                                     _ = egui_multiwin::futures_lite::stream::StreamExt::next(&mut oc) => { }
+                                    _ = dead() => {}
                                 }
                             }
                             println!("Waiting for program to exit");
