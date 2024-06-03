@@ -5,9 +5,11 @@
 
 /// Macro generated code
 pub mod egui_multiwin_dynamic {
-    egui_multiwin::tracked_window!(crate::AppCommon, crate::CustomEvent, crate::MyWindows);
-    egui_multiwin::multi_window!(crate::AppCommon, crate::CustomEvent, crate::MyWindows);
+    egui_multiwin::tracked_window!(crate::AppCommon, crate::MyWindows);
+    egui_multiwin::multi_window!(crate::AppCommon, crate::MyWindows);
 }
+
+use std::sync::Mutex;
 
 /// The windows for the program
 #[enum_dispatch(TrackedWindow)]
@@ -16,8 +18,7 @@ pub enum MyWindows {
     Popup(PopupWindow),
 }
 
-use egui_multiwin::arboard;
-use egui_multiwin::egui_glow::EguiGlow;
+use egui_multiwin::egui_glow_async::EguiGlow;
 use egui_multiwin::enum_dispatch::enum_dispatch;
 use egui_multiwin_dynamic::multi_window::NewWindowRequest;
 use egui_multiwin_dynamic::tracked_window::RedrawResponse;
@@ -30,22 +31,6 @@ pub struct AppCommon {
     clicks: u32,
 }
 
-/// Custom event type passed to windows
-#[derive(Debug)]
-pub struct CustomEvent {
-    /// The optional window id
-    window: Option<egui_multiwin::winit::window::WindowId>,
-    /// The message
-    message: u32,
-}
-
-impl CustomEvent {
-    /// Return the window id
-    fn window_id(&self) -> Option<egui_multiwin::winit::window::WindowId> {
-        self.window
-    }
-}
-
 /// The popup window
 pub struct PopupWindow {}
 
@@ -54,9 +39,9 @@ impl PopupWindow {
     pub fn request() -> NewWindowRequest {
         NewWindowRequest::new(
             MyWindows::Popup(PopupWindow {}),
-            egui_multiwin::winit::window::WindowBuilder::new()
+            egui_multiwin::async_winit::window::WindowBuilder::new()
                 .with_resizable(false)
-                .with_inner_size(egui_multiwin::winit::dpi::LogicalSize {
+                .with_inner_size(egui_multiwin::async_winit::dpi::LogicalSize {
                     width: 400.0,
                     height: 200.0,
                 })
@@ -65,7 +50,6 @@ impl PopupWindow {
                 vsync: false,
                 shader: None,
             },
-            egui_multiwin::multi_window::new_id(),
         )
     }
 }
@@ -75,12 +59,12 @@ impl TrackedWindow for PopupWindow {
         true
     }
 
-    fn redraw(
+    async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
         &mut self,
         c: &mut AppCommon,
         egui: &mut EguiGlow,
-        _window: &egui_multiwin::winit::window::Window,
-        _clipboard: &mut arboard::Clipboard,
+        _window: &egui_multiwin::async_winit::window::Window<TS>,
+        _clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
     ) -> RedrawResponse {
         let quit = false;
         egui_multiwin::egui::CentralPanel::default().show(&egui.egui_ctx, |ui| {
@@ -93,28 +77,11 @@ impl TrackedWindow for PopupWindow {
     }
 }
 
-impl AppCommon {
-    /// Process events
-    fn process_event(&mut self, event: CustomEvent) -> Vec<NewWindowRequest> {
-        let mut windows_to_create = vec![];
-        println!("Received an event {:?}", event);
-        if event.message == 42 {
-            windows_to_create.push(PopupWindow::request());
-        }
-        windows_to_create
-    }
-}
-
-fn main() {
-    egui_multiwin_dynamic::multi_window::MultiWindow::start(|multi_window, event_loop, _proxy| {
-        let root_window = PopupWindow::request();
-
-        let mut ac = AppCommon { clicks: 0 };
-
-        if let Err(e) = multi_window.add(root_window, &mut ac, event_loop) {
-            println!("Failed to create main window {:?}", e);
-        }
-        ac
-    })
-    .unwrap();
+#[tokio::main]
+async fn main() {
+    let mut multi_window = egui_multiwin_dynamic::multi_window::MultiWindow::new();
+    let root_window = PopupWindow::request();
+    let ac = AppCommon { clicks: 0 };
+    multi_window.add(root_window).await;
+    multi_window.run(ac).unwrap();
 }

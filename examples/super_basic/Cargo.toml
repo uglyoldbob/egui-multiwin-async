@@ -6,3 +6,4 @@ publish = ["crates-io"]
 
 [dependencies]
 egui-multiwin = { version = "0.5.1",  path = "../../egui-multiwin" }
+tokio = { version = "1.37.0", features = ["full"] }

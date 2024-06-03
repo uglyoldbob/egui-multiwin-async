@@ -3,20 +3,12 @@
 
 //! An example showing how to use vsync
 
-use egui_multiwin_dynamic::multi_window::{MultiWindow, NewWindowRequest};
+use egui_multiwin_dynamic::multi_window::MultiWindow;
 
 /// Macro generated code
 pub mod egui_multiwin_dynamic {
-    egui_multiwin::tracked_window!(
-        crate::AppCommon,
-        egui_multiwin::NoEvent,
-        crate::windows::MyWindows
-    );
-    egui_multiwin::multi_window!(
-        crate::AppCommon,
-        egui_multiwin::NoEvent,
-        crate::windows::MyWindows
-    );
+    egui_multiwin::tracked_window!(crate::AppCommon, crate::windows::MyWindows);
+    egui_multiwin::multi_window!(crate::AppCommon, crate::windows::MyWindows);
 }
 
 mod windows;
@@ -35,16 +27,8 @@ pub struct AppCommon {
     clicks: u32,
 }
 
-impl AppCommon {
-    /// Process events, do nothing
-    fn process_event(&mut self, _event: egui_multiwin::NoEvent) -> Vec<NewWindowRequest> {
-        Vec::new()
-    }
-}
-
-fn main() {
-    let mut event_loop = egui_multiwin::winit::event_loop::EventLoopBuilder::with_user_event();
-    let event_loop = event_loop.build().unwrap();
+#[tokio::main]
+async fn main() {
     let mut multi_window: MultiWindow = MultiWindow::new();
     multi_window.add_font(
         "computermodern".to_string(),
@@ -53,9 +37,9 @@ fn main() {
     let root_window = root::RootWindow::request();
     let root_window2 = popup_window::PopupWindow::request("initial popup".to_string());
 
-    let mut ac = AppCommon { clicks: 0 };
+    let ac = AppCommon { clicks: 0 };
 
-    let _e = multi_window.add(root_window, &mut ac, &event_loop);
-    let _e = multi_window.add(root_window2, &mut ac, &event_loop);
-    multi_window.run(event_loop, ac).unwrap();
+    let _e = multi_window.add(root_window).await;
+    let _e = multi_window.add(root_window2).await;
+    multi_window.run(ac).unwrap();
 }

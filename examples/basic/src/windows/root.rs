@@ -1,9 +1,6 @@
 //! Code for the root window of the project.
 
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::sync::{Arc, Mutex};
 
 use crate::egui_multiwin_dynamic::{
     multi_window::NewWindowRequest,
@@ -67,13 +64,13 @@ impl TrackedWindow for RootWindow {
         &mut self,
         c: &mut AppCommon,
         egui: &mut EguiGlow,
-        _window: &egui_multiwin::async_winit::window::Window<TS>,
+        window: &egui_multiwin::async_winit::window::Window<TS>,
         _clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
     ) -> RedrawResponse {
         let mut quit = false;
 
         let egui_ctx = &egui.egui_ctx;
-        egui_ctx.request_repaint_after(Duration::from_millis(95));
+        window.request_redraw();
 
         let cur_time = std::time::Instant::now();
         let delta = cur_time.duration_since(self.prev_time);
@@ -88,50 +85,56 @@ impl TrackedWindow for RootWindow {
 
         let mut windows_to_create = vec![];
 
-        egui_multiwin::egui::SidePanel::left("my_side_panel").show_async(egui_ctx, |ui| {
-            ui.heading("Hello World!");
-            if ui.button("New popup").clicked() {
-                windows_to_create.push(PopupWindow::request(format!(
-                    "popup window #{}",
-                    self.num_popups_created
-                )));
-                self.num_popups_created += 1;
-            }
-            if ui.button("New transparent window").clicked() {
-                windows_to_create.push(crate::windows::transparent_window::PopupWindow::request(
-                    "Transparent".to_string(),
-                ));
-            }
-            if ui.button("Quit").clicked() {
-                quit = true;
-            }
-        }).await;
-        egui_multiwin::egui::CentralPanel::default().show_async(egui_ctx, |ui| async move {
-            let mut ui = ui.lock();
-            ui.label(format!("The fps is {}", self.fps.unwrap()));
-            ui.heading(format!("number {}", c.clicks));
-            let t = egui_multiwin::egui::widget_text::RichText::new("Example custom font text");
-            let t = t.font(FontId {
-                size: 12.0,
-                family: egui_multiwin::egui::FontFamily::Name("computermodern".into()),
-            });
-            ui.label(t);
-            ui.checkbox(&mut self.summon_groot, "summon groot");
-            if self.summon_groot {
-                egui_ctx.show_viewport_deferred(
-                    egui_multiwin::egui::viewport::ViewportId::from_hash_of("Testing"),
-                    egui_multiwin::egui::viewport::ViewportBuilder {
-                        title: Some("Test title".to_string()),
-                        ..Default::default()
-                    },
-                    |a, _b| {
-                        egui_multiwin::egui::CentralPanel::default().show(a, |ui| {
-                            ui.label("I am groot");
-                        });
-                    },
-                );
-            }
-        }).await;
+        egui_multiwin::egui::SidePanel::left("my_side_panel")
+            .show_async(egui_ctx, |ui| {
+                ui.heading("Hello World!");
+                if ui.button("New popup").clicked() {
+                    windows_to_create.push(PopupWindow::request(format!(
+                        "popup window #{}",
+                        self.num_popups_created
+                    )));
+                    self.num_popups_created += 1;
+                }
+                if ui.button("New transparent window").clicked() {
+                    windows_to_create.push(
+                        crate::windows::transparent_window::PopupWindow::request(
+                            "Transparent".to_string(),
+                        ),
+                    );
+                }
+                if ui.button("Quit").clicked() {
+                    quit = true;
+                }
+            })
+            .await;
+        egui_multiwin::egui::CentralPanel::default()
+            .show_async(egui_ctx, |ui| async move {
+                let mut ui = ui.lock();
+                ui.label(format!("The fps is {}", self.fps.unwrap()));
+                ui.heading(format!("number {}", c.clicks));
+                let t = egui_multiwin::egui::widget_text::RichText::new("Example custom font text");
+                let t = t.font(FontId {
+                    size: 12.0,
+                    family: egui_multiwin::egui::FontFamily::Name("computermodern".into()),
+                });
+                ui.label(t);
+                ui.checkbox(&mut self.summon_groot, "summon groot");
+                if self.summon_groot {
+                    egui_ctx.show_viewport_deferred(
+                        egui_multiwin::egui::viewport::ViewportId::from_hash_of("Testing"),
+                        egui_multiwin::egui::viewport::ViewportBuilder {
+                            title: Some("Test title".to_string()),
+                            ..Default::default()
+                        },
+                        |a, _b| {
+                            egui_multiwin::egui::CentralPanel::default().show(a, |ui| {
+                                ui.label("I am groot");
+                            });
+                        },
+                    );
+                }
+            })
+            .await;
         RedrawResponse {
             quit,
             new_windows: windows_to_create,

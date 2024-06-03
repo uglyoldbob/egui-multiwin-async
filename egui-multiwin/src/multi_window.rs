@@ -31,6 +31,16 @@ macro_rules! tracked_window {
 
             use $window;
 
+            /// The internally used return value for redrawing a window
+            pub struct InternalRedrawResponse {
+                /// Should the window exit?
+                pub quit: bool,
+                /// A list of windows that the window desires to have created.
+                pub new_windows: Vec<NewWindowRequest>,
+                /// Redraw time
+                pub redraw: Option<std::time::Duration>,
+            }
+
             /// The return value of the redraw function of trait `TrackedWindow`
             pub struct RedrawResponse {
                 /// Should the window exit?
@@ -247,7 +257,7 @@ macro_rules! tracked_window {
                     c: &std::sync::Arc<Mutex<$common>>,
                     clipboard: &std::sync::Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
                     el: &EventLoopWindowTarget,
-                ) -> Option<RedrawResponse>
+                ) -> Option<InternalRedrawResponse>
                 {
                     let mut gl_window = self.gl_window_option().take().unwrap().make_current();
                     let mut com = c.lock().unwrap();
@@ -307,7 +317,7 @@ macro_rules! tracked_window {
                             let vp_output = full_output
                                 .viewport_output
                                 .get(s.viewportid);
-                            let repaint_after = vp_output.map(|v| v.repaint_delay).unwrap_or(std::time::Duration::from_millis(1000));
+                            let repaint_after = vp_output.map(|v| v.repaint_delay).or_else(||None);
 
                             {
                                 s.gl_clear();
@@ -317,7 +327,12 @@ macro_rules! tracked_window {
                                 let e = gl_window2.swap_buffers();
                                 drop(gl_window2);
                             }
-                            Some(rr)
+                            let irr = InternalRedrawResponse {
+                                new_windows: rr.new_windows,
+                                quit: rr.quit,
+                                redraw: repaint_after,
+                            };
+                            Some(irr)
                         };
                     }
                     self.gl_window_option().replace(gl_window.make_not_current());
@@ -703,23 +718,6 @@ macro_rules! multi_window {
                     }
                 }
 
-                /// A simpler way to start up a user application. The provided closure should initialize the root window, add any fonts desired, store the proxy if it is needed, and return the common app struct.
-                pub async fn start(
-                    t: impl FnOnce(
-                        &mut Self,
-                        &EventLoop<async_winit::ThreadSafe>,
-                    ) -> $common,
-                ) -> Result<(), EventLoopError> {
-                    let mut event_loop =
-                        egui_multiwin::async_winit::event_loop::EventLoopBuilder::new();
-                    let event_loop = event_loop.build();
-                    let mut multi_window = Self::new();
-
-                    let ac = t(&mut multi_window, &event_loop);
-
-                    multi_window.run(ac)
-                }
-
                 /// Add a font that is applied to every window. Be sure to call this before calling [add](crate::multi_window::MultiWindow::add)
                 /// multi_window is an instance of [MultiWindow](crate::multi_window::MultiWindow), DATA is a static `&[u8]` - most like defined with a `include_bytes!()` macro
                 /// ```
@@ -862,6 +860,11 @@ macro_rules! multi_window {
                                     if !rr.new_windows.is_empty() {
                                         for w in rr.new_windows {
                                             nwr.send(w).await.unwrap();
+                                        }
+                                    }
+                                    if let Some(redraw) = rr.redraw {
+                                        println!("Need to trigger a redraw after {:?}", redraw);
+                                        if redraw.is_zero() {
                                         }
                                     }
                                 }

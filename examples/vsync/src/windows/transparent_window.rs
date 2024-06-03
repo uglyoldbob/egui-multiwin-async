@@ -1,11 +1,13 @@
 //! This is an example of a popup window. It is likely very crude on the opengl_after function and could probably be optimized
+use std::sync::{Arc, Mutex};
+
 use crate::egui_multiwin_dynamic::{
     multi_window::NewWindowRequest,
     tracked_window::{RedrawResponse, TrackedWindow},
 };
 use egui_multiwin::egui;
-use egui_multiwin::egui_glow::glow;
-use egui_multiwin::egui_glow::EguiGlow;
+use egui_multiwin::egui_glow_async::glow;
+use egui_multiwin::egui_glow_async::EguiGlow;
 
 use crate::AppCommon;
 
@@ -22,10 +24,10 @@ impl PopupWindow {
             super::MyWindows::Transparent(PopupWindow {
                 input: label.clone(),
             }),
-            egui_multiwin::winit::window::WindowBuilder::new()
+            egui_multiwin::async_winit::window::WindowBuilder::new()
                 .with_resizable(false)
                 .with_transparent(true)
-                .with_inner_size(egui_multiwin::winit::dpi::LogicalSize {
+                .with_inner_size(egui_multiwin::async_winit::dpi::LogicalSize {
                     width: 400.0,
                     height: 200.0,
                 })
@@ -34,19 +36,18 @@ impl PopupWindow {
                 vsync: false,
                 shader: None,
             },
-            egui_multiwin::multi_window::new_id(),
         )
     }
 }
 
 impl TrackedWindow for PopupWindow {
-    unsafe fn opengl_after(
+    async unsafe fn opengl_after(
         &mut self,
         _c: &mut AppCommon,
-        gl: &std::sync::Arc<egui_multiwin::egui_glow::painter::Context>,
+        gl: &std::sync::Arc<egui_multiwin::egui_glow_async::painter::Context>,
     ) {
         use glow::HasContext;
-        let shader_version = egui_multiwin::egui_glow::ShaderVersion::get(gl);
+        let shader_version = egui_multiwin::egui_glow_async::ShaderVersion::get(gl);
         let vertex_array = gl
             .create_vertex_array()
             .expect("Cannot create vertex array");
@@ -114,24 +115,28 @@ impl TrackedWindow for PopupWindow {
         (c.clicks & 1) == 0
     }
 
-    fn redraw(
+    async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
         &mut self,
         c: &mut AppCommon,
         egui: &mut EguiGlow,
-        window: &egui_multiwin::winit::window::Window,
-        _clipboard: &mut egui_multiwin::arboard::Clipboard,
+        window: &egui_multiwin::async_winit::window::Window<TS>,
+        _clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
     ) -> RedrawResponse {
-        let mut quit = false;
+        let quit = Arc::new(Mutex::new(false));
+        let quit2 = quit.clone();
 
         let style = egui::style::Style::default();
         let mut frame = egui::containers::Frame::central_panel(&style);
         frame.fill = egui::Color32::from_white_alpha(0);
         egui_multiwin::egui::CentralPanel::default()
             .frame(frame)
-            .show(&egui.egui_ctx, |ui| {
+            .show_async(&egui.egui_ctx, |ui| async move {
+                let mut ui = ui.lock();
                 if ui.button("Increment").clicked() {
                     c.clicks += 1;
-                    window.set_title(&format!("Title update {}", c.clicks));
+                    window
+                        .set_title(&format!("Title update {}", c.clicks))
+                        .await;
                 }
                 let response = ui.add(egui_multiwin::egui::TextEdit::singleline(&mut self.input));
                 if response.changed() {
@@ -143,9 +148,11 @@ impl TrackedWindow for PopupWindow {
                     // …
                 }
                 if ui.button("Quit").clicked() {
-                    quit = true;
+                    *quit2.lock().unwrap() = true;
                 }
-            });
+            })
+            .await;
+        let quit = *quit.lock().unwrap();
         RedrawResponse {
             quit,
             new_windows: Vec::new(),

@@ -1,11 +1,13 @@
 //! The code for the root window
 
+use std::sync::{Arc, Mutex};
+
 use crate::egui_multiwin_dynamic::{
     multi_window::NewWindowRequest,
     tracked_window::{RedrawResponse, TrackedWindow},
 };
 use egui_multiwin::egui::FontId;
-use egui_multiwin::egui_glow::EguiGlow;
+use egui_multiwin::egui_glow_async::EguiGlow;
 
 use crate::AppCommon;
 
@@ -30,9 +32,9 @@ impl RootWindow {
                 num_popups_created: 0,
                 stuff: "".to_string(),
             }),
-            egui_multiwin::winit::window::WindowBuilder::new()
+            egui_multiwin::async_winit::window::WindowBuilder::new()
                 .with_resizable(true)
-                .with_inner_size(egui_multiwin::winit::dpi::LogicalSize {
+                .with_inner_size(egui_multiwin::async_winit::dpi::LogicalSize {
                     width: 800.0,
                     height: 600.0,
                 })
@@ -41,7 +43,6 @@ impl RootWindow {
                 vsync: false,
                 shader: None,
             },
-            egui_multiwin::multi_window::new_id(),
         )
     }
 }
@@ -53,12 +54,12 @@ impl TrackedWindow for RootWindow {
 
     fn set_root(&mut self, _root: bool) {}
 
-    fn redraw(
+    async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
         &mut self,
         c: &mut AppCommon,
         egui: &mut EguiGlow,
-        _window: &egui_multiwin::winit::window::Window,
-        clipboard: &mut egui_multiwin::arboard::Clipboard,
+        _window: &egui_multiwin::async_winit::window::Window<TS>,
+        clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
     ) -> RedrawResponse {
         let mut quit = false;
 
@@ -86,12 +87,15 @@ impl TrackedWindow for RootWindow {
             });
             ui.label(format!("Text from clipboard is {}", self.stuff));
             if ui.button("Click to get clipboard contents").clicked() {
-                if let Ok(s) = clipboard.get_text() {
+                if let Ok(s) = clipboard.lock().unwrap().get_text() {
                     self.stuff = s;
                 }
             }
             if ui.button("Click to put text onto clipboard").clicked() {
-                let _e = clipboard.set_text("This is text from the egui-multiwin demo");
+                let _e = clipboard
+                    .lock()
+                    .unwrap()
+                    .set_text("This is text from the egui-multiwin demo");
             }
             ui.label(t);
         });

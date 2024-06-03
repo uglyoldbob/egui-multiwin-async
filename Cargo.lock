@@ -1029,17 +1029,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "multiwin-demo2"
-version = "0.1.0"
-dependencies = [
- "egui-multiwin",
-]
-
-[[package]]
 name = "multiwin-demo3"
 version = "0.1.0"
 dependencies = [
  "egui-multiwin",
+ "tokio",
 ]
 
 [[package]]
@@ -1047,20 +1041,7 @@ name = "multiwin-demo4"
 version = "0.1.0"
 dependencies = [
  "egui-multiwin",
-]
-
-[[package]]
-name = "multiwin-demo5"
-version = "0.1.0"
-dependencies = [
- "egui-multiwin",
-]
-
-[[package]]
-name = "multiwin-demo6"
-version = "0.1.0"
-dependencies = [
- "egui-multiwin",
+ "tokio",
 ]
 
 [[package]]
@@ -1068,6 +1049,7 @@ name = "multiwin-demo7"
 version = "0.1.0"
 dependencies = [
  "egui-multiwin",
+ "tokio",
 ]
 
 [[package]]
