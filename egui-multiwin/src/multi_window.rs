@@ -246,13 +246,14 @@ macro_rules! tracked_window {
                 pub async fn redraw(&mut self,
                     c: &std::sync::Arc<Mutex<$common>>,
                     clipboard: &std::sync::Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
-                )
+                ) -> Option<RedrawResponse>
                 {
                     let mut gl_window = self.gl_window_option().take().unwrap().make_current();
                     let mut com = c.lock().unwrap();
+                    let mut rr = None;
                     if let Some(mut s) = self.prepare_for_events() {
                         let mut viewportset = s.viewportset.lock().unwrap();
-                        let redraw_thing = {
+                        rr = {
                             let gl_window2 = gl_window.context().unwrap();
                             s.begin_frame(&gl_window2.window).await;
                             let mut rr = RedrawResponse::default();
@@ -322,6 +323,7 @@ macro_rules! tracked_window {
                         };
                     }
                     self.gl_window_option().replace(gl_window.make_not_current());
+                    rr
                 }
             }
 
@@ -675,7 +677,9 @@ macro_rules! multi_window {
                 /// The event loop for the application
                 event_loop: Option<egui_multiwin::async_winit::event_loop::EventLoop<async_winit::ThreadSafe>>,
                 /// List of windows to be created
-                pending_windows: Vec<NewWindowRequest>,
+                pending_windows: egui_multiwin::async_channel::Sender<NewWindowRequest>,
+                /// Processor for making new windows
+                window_receiver: Option<egui_multiwin::async_channel::Receiver<NewWindowRequest>>,
                 /// A list of fonts to install on every egui instance
                 fonts: HashMap<String, egui_multiwin::egui::FontData>,
                 /// The clipboard
@@ -691,9 +695,11 @@ macro_rules! multi_window {
             impl MultiWindow {
                 /// Creates a new `MultiWindow`.
                 pub fn new() -> Self {
+                    let (t, r) = egui_multiwin::async_channel::bounded(10);
                     MultiWindow {
                         event_loop: Some(egui_multiwin::async_winit::event_loop::EventLoop::new()),
-                        pending_windows: vec![],
+                        pending_windows: t,
+                        window_receiver: Some(r),
                         fonts: HashMap::new(),
                         clipboard: Arc::new(Mutex::new(egui_multiwin::arboard::Clipboard::new().unwrap())),
                     }
@@ -737,11 +743,11 @@ macro_rules! multi_window {
                 }
 
                 /// Adds a new `TrackedWindow` to the `MultiWindow`. If custom fonts are desired, call [add_font](crate::multi_window::MultiWindow::add_font) first.
-                pub fn add(
+                pub async fn add(
                     &mut self,
                     window: NewWindowRequest,
                 ) {
-                    self.pending_windows.push(window);
+                    self.pending_windows.send(window).await.unwrap();
                 }
 
                 async fn init_egui(
@@ -782,87 +788,124 @@ macro_rules! multi_window {
                     twc.check_viewport_builder().await;
                 }
 
+                async fn process_pending_window(&mut self,
+                    window: NewWindowRequest,
+                    c: Arc<Mutex<$common>>,
+                    elwt: &async_winit::event_loop::EventLoopWindowTarget<async_winit::ThreadSafe>,
+                    events: &mut egui_multiwin::Events,
+                ) -> Result<(), DisplayCreationError> {
+                    let twc = TrackedWindowContainer::create(
+                        window.window_state.map(|a| Arc::new(Mutex::new(a))),
+                        window.viewportset,
+                        &window
+                            .viewport_id
+                            .unwrap_or(egui::viewport::ViewportId::ROOT),
+                        window.viewport_callback,
+                        window.builder,
+                        elwt,
+                        &window.options,
+                        window.viewport,
+                    ).await?;
+                    let twc = Arc::new(Mutex::new(twc));
+                    let twc2 = twc.clone();
+                    let clipboard = self.clipboard.to_owned();
+                    let fonts = self.fonts.clone();
+                    let c2 = c.to_owned();
+                    let elwt2 = elwt.clone();
+                    let nwr = self.pending_windows.clone();
+                    let window_process = async move {
+                        let (quit_t, mut quit_r) = egui_multiwin::async_channel::bounded(2);
+                        let id : usize = egui_multiwin::rand::Rng::gen(&mut egui_multiwin::rand::thread_rng());
+                        let glw = {
+                            let twc3 = twc2.lock().unwrap();
+                            twc3.get_common().gl_window.as_ref().unwrap().window()
+                        };
+                        let glw3 = glw.clone();
+                        let quit = async move {
+                            quit_r.recv().await.unwrap();
+                        };
+                        let close = glw3.close_requested().wait();
+                        let (t, mut r) = egui_multiwin::async_channel::bounded(10);
+                        let (t2, mut r2) = egui_multiwin::async_channel::bounded(10);
+                        let ta = t.clone();
+                        glw3.close_requested().wait_direct_async(move |a| {
+                            let t = ta.clone();
+                            async move {
+                                t.send(true).await.unwrap();
+                                println!("Close window {}", id);
+                                false
+                            }
+                        });
+                        // This runs the drawing on the proper thread, preventing async-winit from trying to run two draw events at the same time
+                        glw3.redraw_requested().wait_direct_async(move |c| {
+                            let t = t.clone();
+                            let r2 = r2.clone();
+                            async move {
+                                t.send(true).await.unwrap();
+                                let a: bool = r2.recv().await.unwrap();
+                                true
+                            }
+                        });
+                        let twc4 = twc2.clone();
+                        let draw = async move {
+                            let mut glw2 = glw.clone();
+                            {
+                                let mut twc5 = twc4.lock().unwrap();
+                                Self::init_egui(&fonts, &mut *twc5, &elwt2, &mut glw2).await;
+                            };
+                            loop {
+                                let a = r.recv().await.unwrap();
+                                let mut t = twc4.lock().unwrap();
+                                if let Some(rr) = t.redraw(&c2, &clipboard).await {
+                                    if rr.quit {
+                                        println!("Need to quit a window");
+                                        quit_t.send(()).await.unwrap();
+                                    }
+                                    if !rr.new_windows.is_empty() {
+                                        for w in rr.new_windows {
+                                            nwr.send(w).await.unwrap();
+                                        }
+                                    }
+                                }
+                                drop(t);
+                                t2.send(true).await.unwrap();
+                            }
+                        };
+                        use egui_multiwin::futures_lite::FutureExt;
+                        close.or(draw).or(quit).await;
+                    };
+                    if let Some(s) = twc.clone().lock().unwrap().get_window_data() {
+                        if s.lock().unwrap().is_root() {
+                            events.window_close.get().add_future(window_process);
+                        }
+                        else {
+                            events.non_root_windows.get().add_future(window_process);
+                        }
+                    }
+                    else {
+                        events.non_root_windows.get().add_future(window_process);
+                    }
+                    Ok(())
+                }
+
+                async fn get_pending_window(&mut self) -> Result<NewWindowRequest, egui_multiwin::async_channel::RecvError> {
+                    self.window_receiver.as_ref().unwrap().recv().await
+                }
+
                 async fn process_pending_windows(&mut self,
                     c: Arc<Mutex<$common>>,
                     elwt: &async_winit::event_loop::EventLoopWindowTarget<async_winit::ThreadSafe>,
                     events: &mut egui_multiwin::Events,
                 ) -> Result<(), DisplayCreationError> {
-                    while let Some(window) = self.pending_windows.pop() {
-                        let twc = TrackedWindowContainer::create(
-                            window.window_state.map(|a| Arc::new(Mutex::new(a))),
-                            window.viewportset,
-                            &window
-                                .viewport_id
-                                .unwrap_or(egui::viewport::ViewportId::ROOT),
-                            window.viewport_callback,
-                            window.builder,
-                            elwt,
-                            &window.options,
-                            window.viewport,
-                        ).await?;
-                        let twc = Arc::new(Mutex::new(twc));
-                        let twc2 = twc.clone();
-                        let clipboard = self.clipboard.to_owned();
-                        let fonts = self.fonts.clone();
-                        let c2 = c.to_owned();
-                        let elwt2 = elwt.clone();
-                        let window_process = async move {
-                            let id : usize = egui_multiwin::rand::Rng::gen(&mut egui_multiwin::rand::thread_rng());
-                            let glw = {
-                                let twc3 = twc2.lock().unwrap();
-                                twc3.get_common().gl_window.as_ref().unwrap().window()
-                            };
-                            let glw3 = glw.clone();
-                            let close = glw3.close_requested().wait();
-                            let (t, mut r) = egui_multiwin::async_channel::bounded(10);
-                            let (t2, mut r2) = egui_multiwin::async_channel::bounded(10);
-                            let ta = t.clone();
-                            glw3.close_requested().wait_direct_async(move |a| {
-                                let t = ta.clone();
-                                async move {
-                                    t.send(true).await.unwrap();
-                                    println!("Close window {}", id);
-                                    false
-                                }
-                            });
-                            // This runs the drawing on the proper thread, preventing async-winit from trying to run two draw events at the same time
-                            glw3.redraw_requested().wait_direct_async(move |c| {
-                                let t = t.clone();
-                                let r2 = r2.clone();
-                                async move {
-                                    t.send(true).await.unwrap();
-                                    let a: bool = r2.recv().await.unwrap();
-                                    true
-                                }
-                            });
-                            let twc4 = twc2.clone();
-                            let draw = async move {
-                                let mut glw2 = glw.clone();
-                                {
-                                    let mut twc5 = twc4.lock().unwrap();
-                                    Self::init_egui(&fonts, &mut *twc5, &elwt2, &mut glw2).await;
-                                };
-                                loop {
-                                    let a = r.recv().await.unwrap();
-                                    let mut t = twc4.lock().unwrap();
-                                    t.redraw(&c2, &clipboard).await;
-                                    drop(t);
-                                    t2.send(true).await.unwrap();
-                                }
-                            };
-                            use egui_multiwin::futures_lite::FutureExt;
-                            close.or(draw).await;
+                    loop {
+                        let window = {
+                            self.window_receiver.as_ref().unwrap().try_recv()
                         };
-                        if let Some(s) = twc.clone().lock().unwrap().get_window_data() {
-                            if s.lock().unwrap().is_root() {
-                                events.window_close.get().add_future(window_process);
-                            }
-                            else {
-                                events.non_root_windows.get().add_future(window_process);
-                            }
+                        if let Ok(window) = window {
+                            self.process_pending_window(window, c.to_owned(), elwt, events).await?;
                         }
                         else {
-                            events.non_root_windows.get().add_future(window_process);
+                            break;
                         }
                     }
                     Ok(())
@@ -885,14 +928,25 @@ macro_rules! multi_window {
                             event_loop_window_target.resumed().await;
                             let e = event_loop_window_target.exit();
                             let mut events = egui_multiwin::Events::new();
-                            self.process_pending_windows(c, &event_loop_window_target, &mut events).await.unwrap();
+                            self.process_pending_windows(c.to_owned(), &event_loop_window_target, &mut events).await.unwrap();
+                            println!("Done processing initial windows");
                             let mut wc = events.window_close.clone();
                             let mut oc = events.non_root_windows.clone();
                             let dead = egui_multiwin::deadlock;
+                            let pend = Self::get_pending_window;
                             loop {
                                 tokio::select! {
                                     _ = &mut wc => { println!("All the root windows closed"); break; }
                                     _ = egui_multiwin::futures_lite::stream::StreamExt::next(&mut oc) => { }
+                                    pw = pend(&mut self) => {
+                                        if let Ok(w) = pw {
+                                            self.process_pending_window(w,
+                                                c.to_owned(),
+                                                &event_loop_window_target,
+                                                &mut events,
+                                            ).await.unwrap();
+                                        }
+                                    }
                                     _ = dead() => {}
                                 }
                             }

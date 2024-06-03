@@ -122,12 +122,12 @@ impl TrackedWindow for PopupWindow {
         window: &egui_multiwin::async_winit::window::Window<TS>,
         _clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
     ) -> RedrawResponse {
-        let mut quit = false;
-
         let egui_ctx = &egui.egui_ctx;
         let style = egui::style::Style::default();
         let mut frame = egui::containers::Frame::central_panel(&style);
         frame.fill = egui::Color32::from_white_alpha(0);
+        let quit = Arc::new(Mutex::new(false));
+        let quit2 = quit.clone();
         egui_multiwin::egui::CentralPanel::default()
             .frame(frame)
             .show_async(egui_ctx, |ui| async move {
@@ -150,10 +150,11 @@ impl TrackedWindow for PopupWindow {
                     // …
                 }
                 if ui.button("Quit").clicked() {
-                    quit = true;
+                    *quit.lock().unwrap() = true;
                 }
             })
             .await;
+        let quit = *quit2.lock().unwrap();
         RedrawResponse {
             quit,
             new_windows: Vec::new(),

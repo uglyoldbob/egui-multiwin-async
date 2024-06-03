@@ -120,9 +120,9 @@ impl TrackedWindow for PopupWindow {
         window: &egui_multiwin::async_winit::window::Window<TS>,
         _clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
     ) -> RedrawResponse {
-        let mut quit = false;
-
         let egui_ctx = &egui.egui_ctx;
+        let quit = Arc::new(Mutex::new(false));
+        let quit2 = quit.clone();
         egui_multiwin::egui::CentralPanel::default()
             .show_async(egui_ctx, |ui| async move {
                 use std::ops::DerefMut;
@@ -144,10 +144,11 @@ impl TrackedWindow for PopupWindow {
                     // …
                 }
                 if ui.button("Quit").clicked() {
-                    quit = true;
+                    *quit.lock().unwrap() = true;
                 }
             })
             .await;
+        let quit = *quit2.lock().unwrap();
         RedrawResponse {
             quit,
             new_windows: Vec::new(),
