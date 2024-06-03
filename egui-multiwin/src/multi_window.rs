@@ -69,7 +69,7 @@ macro_rules! tracked_window {
                 /// Runs the redraw for the window. See RedrawResponse for the return value.
                 async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
                     &mut self,
-                    c: Arc<Mutex<$common>>,
+                    c: &mut $common,
                     egui: &mut EguiGlow,
                     window: &egui_multiwin::async_winit::window::Window<TS>,
                     clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
@@ -80,7 +80,7 @@ macro_rules! tracked_window {
                 /// opengl functions are unsafe. This function would require calling opengl functions.
                 async unsafe fn opengl_before(
                     &mut self,
-                    _c: Arc<Mutex<$common>>,
+                    _c: &mut $common,
                     _gl: &Arc<egui_multiwin::egui_glow_async::painter::Context>,
                 ) {
                 }
@@ -90,7 +90,7 @@ macro_rules! tracked_window {
                 /// opengl functions are unsafe. This function would require calling opengl functions.
                 async unsafe fn opengl_after(
                     &mut self,
-                    _c: Arc<Mutex<$common>>,
+                    _c: &mut $common,
                     _gl: &Arc<egui_multiwin::egui_glow_async::painter::Context>,
                 ) {
                 }
@@ -156,7 +156,7 @@ macro_rules! tracked_window {
 
                 /// Redraw the contents of the window
                 async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(&mut self,
-                    c: &std::sync::Arc<Mutex<$common>>,
+                    c: &mut $common,
                     window: &egui_multiwin::async_winit::window::Window<TS>,
                     clipboard: std::sync::Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
                 ) -> Option<RedrawResponse> {
@@ -166,7 +166,7 @@ macro_rules! tracked_window {
                         None
                     }
                     else if let Some(window_data) = self.window.window_data() {
-                        Some(window_data.lock().unwrap().redraw(c.to_owned(), &mut self.egui, window, clipboard).await)
+                        Some(window_data.lock().unwrap().redraw(c, &mut self.egui, window, clipboard).await)
                     }
                     else {
                         None
@@ -188,12 +188,12 @@ macro_rules! tracked_window {
 
                 /// Run the gl before callback
                 async fn gl_before(&mut self,
-                    c: &std::sync::Arc<Mutex<$common>>,
+                    c: &mut $common,
                 ) {
                     let mut egui = &mut self.egui;
                     // draw things behind egui here
                     if let Some(window) = self.window.window_data() {
-                        unsafe { window.lock().unwrap().opengl_before(c.to_owned(), egui.painter.gl()).await };
+                        unsafe { window.lock().unwrap().opengl_before(c, egui.painter.gl()).await };
                     }
                 }
 
@@ -216,11 +216,11 @@ macro_rules! tracked_window {
 
                 /// Run the gl after callback
                 async fn gl_after(&mut self,
-                    c: &std::sync::Arc<Mutex<$common>>,
+                    c: &mut $common,
                 ) {
                     let mut egui = &mut self.egui;
                     if let Some(window) = self.window.window_data() {
-                        unsafe { window.lock().unwrap().opengl_after(c.to_owned(), egui.painter.gl()).await };
+                        unsafe { window.lock().unwrap().opengl_after(c, egui.painter.gl()).await };
                     }
                 }
             }
@@ -249,13 +249,14 @@ macro_rules! tracked_window {
                 )
                 {
                     let mut gl_window = self.gl_window_option().take().unwrap().make_current();
+                    let mut com = c.lock().unwrap();
                     if let Some(mut s) = self.prepare_for_events() {
                         let mut viewportset = s.viewportset.lock().unwrap();
                         let redraw_thing = {
                             let gl_window2 = gl_window.context().unwrap();
                             s.begin_frame(&gl_window2.window).await;
                             let mut rr = RedrawResponse::default();
-                            if let Some(rr2) = s.redraw(&c, &gl_window2.window, clipboard.to_owned()).await {
+                            if let Some(rr2) = s.redraw(&mut com, &gl_window2.window, clipboard.to_owned()).await {
                                 rr = rr2;
                             }
                             let full_output = s.end_frame();
@@ -311,9 +312,9 @@ macro_rules! tracked_window {
 
                             {
                                 s.gl_clear();
-                                s.gl_before(&c).await;
+                                s.gl_before(&mut com).await;
                                 s.draw_main(full_output, &gl_window2.window).await;
-                                s.gl_after(&c).await;
+                                s.gl_after(&mut com).await;
                                 let e = gl_window2.swap_buffers();
                                 drop(gl_window2);
                             }

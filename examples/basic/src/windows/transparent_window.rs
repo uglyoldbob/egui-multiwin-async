@@ -43,7 +43,7 @@ impl PopupWindow {
 impl TrackedWindow for PopupWindow {
     async unsafe fn opengl_after(
         &mut self,
-        _c: Arc<Mutex<AppCommon>>,
+        _c: &mut AppCommon,
         gl: &std::sync::Arc<egui_multiwin::egui_glow_async::painter::Context>,
     ) {
         use glow::HasContext;
@@ -117,7 +117,7 @@ impl TrackedWindow for PopupWindow {
 
     async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
         &mut self,
-        c: Arc<Mutex<AppCommon>>,
+        c: &mut AppCommon,
         egui: &mut EguiGlow,
         window: &egui_multiwin::async_winit::window::Window<TS>,
         _clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
@@ -135,9 +135,9 @@ impl TrackedWindow for PopupWindow {
                 let mut uil = ui.lock().unwrap();
                 let ui = uil.deref_mut();
                 if ui.button("Increment").clicked() {
-                    c.lock().unwrap().clicks += 1;
+                    c.clicks += 1;
                     window
-                        .set_title(&format!("Title update {}", c.lock().unwrap().clicks))
+                        .set_title(&format!("Title update {}", c.clicks))
                         .await;
                 }
                 let response = ui.add(egui_multiwin::egui::TextEdit::singleline(&mut self.input));

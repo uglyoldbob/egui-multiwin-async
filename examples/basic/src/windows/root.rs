@@ -65,7 +65,7 @@ impl TrackedWindow for RootWindow {
 
     async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
         &mut self,
-        c: Arc<Mutex<AppCommon>>,
+        c: &mut AppCommon,
         egui: &mut EguiGlow,
         _window: &egui_multiwin::async_winit::window::Window<TS>,
         _clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
@@ -108,7 +108,7 @@ impl TrackedWindow for RootWindow {
         });
         egui_multiwin::egui::CentralPanel::default().show(egui_ctx, |ui| {
             ui.label(format!("The fps is {}", self.fps.unwrap()));
-            ui.heading(format!("number {}", c.lock().unwrap().clicks));
+            ui.heading(format!("number {}", c.clicks));
             let t = egui_multiwin::egui::widget_text::RichText::new("Example custom font text");
             let t = t.font(FontId {
                 size: 12.0,
