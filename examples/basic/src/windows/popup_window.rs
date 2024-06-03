@@ -125,9 +125,7 @@ impl TrackedWindow for PopupWindow {
         let quit2 = quit.clone();
         egui_multiwin::egui::CentralPanel::default()
             .show_async(egui_ctx, |ui| async move {
-                use std::ops::DerefMut;
-                let mut uil = ui.lock().unwrap();
-                let ui = uil.deref_mut();
+                let mut ui = ui.lock();
                 if ui.button("Increment").clicked() {
                     c.clicks += 1;
                     window

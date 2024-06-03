@@ -246,6 +246,7 @@ macro_rules! tracked_window {
                 pub async fn redraw(&mut self,
                     c: &std::sync::Arc<Mutex<$common>>,
                     clipboard: &std::sync::Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
+                    el: &EventLoopWindowTarget,
                 ) -> Option<RedrawResponse>
                 {
                     let mut gl_window = self.gl_window_option().take().unwrap().make_current();
@@ -281,14 +282,11 @@ macro_rules! tracked_window {
 
                             for (viewport_id, viewport_output) in &full_output.viewport_output {
                                 if viewport_id != &egui::viewport::ViewportId::ROOT && !viewportset.contains(viewport_id) {
-                                    let builder = egui_multiwin::async_winit::window::WindowBuilder::new();
-                                    /*
-                                        egui_multiwin::egui_glow::egui_winit::create_winit_window_builder(
-                                            &self.egui.egui_ctx,
-                                            el,
-                                            viewport_output.builder.to_owned(),
-                                        );
-                                    */
+                                    let builder = egui_multiwin::egui_glow_async::egui_async_winit::create_winit_window_builder(
+                                        &s.egui.egui_ctx,
+                                        el,
+                                        viewport_output.builder.to_owned(),
+                                    ).await;
                                     let options = TrackedWindowOptions {
                                         shader: None,
                                         vsync: false,
@@ -856,7 +854,7 @@ macro_rules! multi_window {
                             loop {
                                 let a = r.recv().await.unwrap();
                                 let mut t = twc4.lock().unwrap();
-                                if let Some(rr) = t.redraw(&c2, &clipboard).await {
+                                if let Some(rr) = t.redraw(&c2, &clipboard, &elwt2).await {
                                     if rr.quit {
                                         println!("Need to quit a window");
                                         quit_t.send(()).await.unwrap();

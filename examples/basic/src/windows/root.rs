@@ -88,7 +88,7 @@ impl TrackedWindow for RootWindow {
 
         let mut windows_to_create = vec![];
 
-        egui_multiwin::egui::SidePanel::left("my_side_panel").show(egui_ctx, |ui| {
+        egui_multiwin::egui::SidePanel::left("my_side_panel").show_async(egui_ctx, |ui| {
             ui.heading("Hello World!");
             if ui.button("New popup").clicked() {
                 windows_to_create.push(PopupWindow::request(format!(
@@ -105,8 +105,9 @@ impl TrackedWindow for RootWindow {
             if ui.button("Quit").clicked() {
                 quit = true;
             }
-        });
-        egui_multiwin::egui::CentralPanel::default().show(egui_ctx, |ui| {
+        }).await;
+        egui_multiwin::egui::CentralPanel::default().show_async(egui_ctx, |ui| async move {
+            let mut ui = ui.lock();
             ui.label(format!("The fps is {}", self.fps.unwrap()));
             ui.heading(format!("number {}", c.clicks));
             let t = egui_multiwin::egui::widget_text::RichText::new("Example custom font text");
@@ -120,6 +121,7 @@ impl TrackedWindow for RootWindow {
                 egui_ctx.show_viewport_deferred(
                     egui_multiwin::egui::viewport::ViewportId::from_hash_of("Testing"),
                     egui_multiwin::egui::viewport::ViewportBuilder {
+                        title: Some("Test title".to_string()),
                         ..Default::default()
                     },
                     |a, _b| {
@@ -129,7 +131,7 @@ impl TrackedWindow for RootWindow {
                     },
                 );
             }
-        });
+        }).await;
         RedrawResponse {
             quit,
             new_windows: windows_to_create,

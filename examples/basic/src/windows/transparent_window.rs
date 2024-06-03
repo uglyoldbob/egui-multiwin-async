@@ -131,29 +131,27 @@ impl TrackedWindow for PopupWindow {
         egui_multiwin::egui::CentralPanel::default()
             .frame(frame)
             .show_async(egui_ctx, |ui| async move {
-                use std::ops::DerefMut;
-                let mut uil = ui.lock().unwrap();
-                let ui = uil.deref_mut();
-                if ui.button("Increment").clicked() {
-                    c.clicks += 1;
-                    window
-                        .set_title(&format!("Title update {}", c.clicks))
-                        .await;
-                }
-                let response = ui.add(egui_multiwin::egui::TextEdit::singleline(&mut self.input));
-                if response.changed() {
-                    // …
-                }
-                if response.lost_focus()
-                    && ui.input(|i| i.key_pressed(egui_multiwin::egui::Key::Enter))
-                {
-                    // …
-                }
-                if ui.button("Quit").clicked() {
-                    *quit.lock().unwrap() = true;
-                }
-            })
-            .await;
+                let mut ui = ui.lock();
+                let quit = quit.clone();
+                    if ui.button("Increment").clicked() {
+                        c.clicks += 1;
+                        window
+                            .set_title(&format!("Title update {}", c.clicks))
+                            .await;
+                    }
+                    let response = ui.add(egui_multiwin::egui::TextEdit::singleline(&mut self.input));
+                    if response.changed() {
+                        // …
+                    }
+                    if response.lost_focus()
+                        && ui.input(|i| i.key_pressed(egui_multiwin::egui::Key::Enter))
+                    {
+                        // …
+                    }
+                    if ui.button("Quit").clicked() {
+                        *quit.lock().unwrap() = true;
+                    }
+            }).await;
         let quit = *quit2.lock().unwrap();
         RedrawResponse {
             quit,
