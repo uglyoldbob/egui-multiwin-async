@@ -77,11 +77,11 @@ macro_rules! tracked_window {
                 fn set_root(&mut self, _root: bool) {}
 
                 /// Runs the redraw for the window. See RedrawResponse for the return value.
-                async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
+                async fn redraw(
                     &mut self,
                     c: &mut $common,
                     egui: &mut EguiGlow,
-                    window: &egui_multiwin::async_winit::window::Window<TS>,
+                    window: &egui_multiwin::async_winit::window::Window<egui_multiwin::async_winit::ThreadSafe>,
                     clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
                 ) -> RedrawResponse;
                 /// Allows opengl rendering to be done underneath all of the egui stuff of the window
@@ -150,7 +150,7 @@ macro_rules! tracked_window {
 
             impl<'a> TrackedWindowContainerInstance<'a> {
                 /// Take input and run egui begin_frame
-                async fn begin_frame<TS: egui_multiwin::async_winit::ThreadSafety>(&mut self, window: &egui_multiwin::async_winit::window::Window<TS>) {
+                async fn begin_frame(&mut self, window: &egui_multiwin::async_winit::window::Window<egui_multiwin::async_winit::ThreadSafe>) {
                     let mut egui = &mut self.egui;
                     let mut l = egui.egui_winit.lock();
                     let input = l.take_egui_input(window).await;
@@ -165,9 +165,9 @@ macro_rules! tracked_window {
                 }
 
                 /// Redraw the contents of the window
-                async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(&mut self,
+                async fn redraw(&mut self,
                     c: &mut $common,
-                    window: &egui_multiwin::async_winit::window::Window<TS>,
+                    window: &egui_multiwin::async_winit::window::Window<egui_multiwin::async_winit::ThreadSafe>,
                     clipboard: std::sync::Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
                 ) -> Option<RedrawResponse> {
                     if let Some(cb) = self.viewport_callback {
@@ -207,9 +207,9 @@ macro_rules! tracked_window {
                     }
                 }
 
-                async fn draw_main<TS: egui_multiwin::async_winit::ThreadSafety>(&mut self,
+                async fn draw_main(&mut self,
                     full_output: egui::FullOutput,
-                    window: &egui_multiwin::async_winit::window::Window<TS>,
+                    window: &egui_multiwin::async_winit::window::Window<egui_multiwin::async_winit::ThreadSafe>,
                 ) {
                     let mut egui = &mut self.egui;
                     let ppp = egui.egui_ctx.pixels_per_point();
@@ -236,16 +236,16 @@ macro_rules! tracked_window {
             }
 
             /// Defines a window
-            pub enum TrackedWindowContainer<TS: egui_multiwin::async_winit::ThreadSafety> {
+            pub enum TrackedWindowContainer {
                 /// A root window
-                PlainWindow(PlainWindowContainer<TS>),
+                PlainWindow(PlainWindowContainer),
                 /// A viewport window
-                Viewport(ViewportWindowContainer<TS>),
+                Viewport(ViewportWindowContainer),
             }
 
-            impl<TS: egui_multiwin::async_winit::ThreadSafety + Clone + 'static> TrackedWindowContainer<TS> {
+            impl TrackedWindowContainer {
                 /// Get the common data reference
-                pub fn get_common(&self) -> &CommonWindowData<TS> {
+                pub fn get_common(&self) -> &CommonWindowData {
                     match self {
                         Self::PlainWindow(p) => &p.common,
                         Self::Viewport(v) => &v.common,
@@ -341,9 +341,9 @@ macro_rules! tracked_window {
             }
 
             /// The common data for all window types
-            pub struct CommonWindowData<TS: egui_multiwin::async_winit::ThreadSafety> {
+            pub struct CommonWindowData {
                 /// The context for the window
-                pub gl_window: Option<IndeterminateWindowedContext<TS>>,
+                pub gl_window: Option<IndeterminateWindowedContext>,
                 /// The egui instance for this window, each window has a separate egui instance.
                 pub egui: Option<EguiGlow>,
                 /// The viewport set
@@ -361,20 +361,20 @@ macro_rules! tracked_window {
             }
 
             /// The container for a viewport window
-            pub struct ViewportWindowContainer<TS: egui_multiwin::async_winit::ThreadSafety> {
+            pub struct ViewportWindowContainer {
                 /// The common data
-                common: CommonWindowData<TS>,
+                common: CommonWindowData,
             }
 
             /// The main container for a root window.
-            pub struct PlainWindowContainer<TS: egui_multiwin::async_winit::ThreadSafety> {
+            pub struct PlainWindowContainer {
                 /// The common data
-                common: CommonWindowData<TS>,
+                common: CommonWindowData,
                 /// The actual window
                 pub window: Arc<Mutex<$window>>,
             }
 
-            impl<TS: egui_multiwin::async_winit::ThreadSafety + Clone + 'static> TrackedWindowContainer<TS> {
+            impl TrackedWindowContainer {
                 /// Apply viewport data if required to do so
                 pub async fn check_viewport_builder(&mut self) {
                     let common = self.common();
@@ -397,7 +397,7 @@ macro_rules! tracked_window {
                 }
 
                 /// Get the common data for the window
-                pub fn common(&self) -> &CommonWindowData<TS> {
+                pub fn common(&self) -> &CommonWindowData {
                     match self {
                         Self::PlainWindow(w) => &w.common,
                         Self::Viewport(w) => &w.common,
@@ -405,7 +405,7 @@ macro_rules! tracked_window {
                 }
 
                 /// Get the common data, mutably, for the window
-                pub fn common_mut(&mut self) -> &mut CommonWindowData<TS> {
+                pub fn common_mut(&mut self) -> &mut CommonWindowData {
                     match self {
                         Self::PlainWindow(w) => &mut w.common,
                         Self::Viewport(w) => &mut w.common,
@@ -413,7 +413,7 @@ macro_rules! tracked_window {
                 }
 
                 /// Get the gl window for the container
-                pub fn gl_window(&self) -> Option<&IndeterminateWindowedContext<TS>> {
+                pub fn gl_window(&self) -> Option<&IndeterminateWindowedContext> {
                     match self {
                         Self::PlainWindow(w) => w.common.gl_window.as_ref(),
                         Self::Viewport(w) => w.common.gl_window.as_ref(),
@@ -421,7 +421,7 @@ macro_rules! tracked_window {
                 }
 
                 /// Get the gl_window option
-                pub fn gl_window_option(&mut self) -> &mut Option<IndeterminateWindowedContext<TS>> {
+                pub fn gl_window_option(&mut self) -> &mut Option<IndeterminateWindowedContext> {
                     match self {
                         Self::PlainWindow(w) => &mut w.common.gl_window,
                         Self::Viewport(w) => &mut w.common.gl_window,
@@ -429,7 +429,7 @@ macro_rules! tracked_window {
                 }
 
                 /// Get the gl window, mutably for the container
-                pub fn gl_window_mut(&mut self) -> Option<&mut IndeterminateWindowedContext<TS>> {
+                pub fn gl_window_mut(&mut self) -> Option<&mut IndeterminateWindowedContext> {
                     match self {
                         Self::PlainWindow(w) => w.common.gl_window.as_mut(),
                         Self::Viewport(w) => w.common.gl_window.as_mut(),
@@ -443,10 +443,10 @@ macro_rules! tracked_window {
                     viewportid: &ViewportId,
                     viewportcb: Option<std::sync::Arc<DeferredViewportUiCallback>>,
                     window_builder: egui_multiwin::async_winit::window::WindowBuilder,
-                    event_loop: &egui_multiwin::async_winit::event_loop::EventLoopWindowTarget<TS>,
+                    event_loop: &egui_multiwin::async_winit::event_loop::EventLoopWindowTarget,
                     options: &TrackedWindowOptions,
                     vb: Option<ViewportBuilder>
-                ) -> Result<TrackedWindowContainer<TS>, DisplayCreationError> {
+                ) -> Result<TrackedWindowContainer, DisplayCreationError> {
                     let rdh = event_loop.raw_display_handle();
                     let winitwindow = window_builder.build().await.unwrap();
                     let rwh = winitwindow.raw_window_handle();
@@ -570,18 +570,18 @@ macro_rules! tracked_window {
             }
 
             /// Enum of the potential options for a window context
-            pub enum IndeterminateWindowedContext<TS: egui_multiwin::async_winit::ThreadSafety> {
+            pub enum IndeterminateWindowedContext {
                 /// The window context is possibly current
-                PossiblyCurrent(ContextHolder<PossiblyCurrentContext, TS>),
+                PossiblyCurrent(ContextHolder<PossiblyCurrentContext>),
                 /// The window context is not current
-                NotCurrent(ContextHolder<NotCurrentContext, TS>),
+                NotCurrent(ContextHolder<NotCurrentContext>),
                 /// The window context is empty
                 None,
             }
 
-            impl<TS: egui_multiwin::async_winit::ThreadSafety + Clone> IndeterminateWindowedContext<TS> {
+            impl IndeterminateWindowedContext {
                 /// Get the window handle
-                pub fn window(&self) -> Arc<async_winit::window::Window<TS>> {
+                pub fn window(&self) -> Arc<async_winit::window::Window<egui_multiwin::async_winit::ThreadSafe>> {
                     match self {
                         IndeterminateWindowedContext::PossiblyCurrent(pc) => pc.window(),
                         IndeterminateWindowedContext::NotCurrent(nc) => nc.window(),
@@ -632,7 +632,7 @@ macro_rules! tracked_window {
                 }
 
                 /// Get a possibly current context
-                pub fn context(&self) -> Option<&ContextHolder<PossiblyCurrentContext, TS>> {
+                pub fn context(&self) -> Option<&ContextHolder<PossiblyCurrentContext>> {
                     match self {
                         IndeterminateWindowedContext::PossiblyCurrent(pc) => Some(pc),
                         IndeterminateWindowedContext::NotCurrent(nc) => None,
@@ -748,7 +748,7 @@ macro_rules! multi_window {
 
                 async fn init_egui(
                     fontmap: &HashMap<String, egui_multiwin::egui::FontData>,
-                    twc: &mut TrackedWindowContainer<async_winit::ThreadSafe>,
+                    twc: &mut TrackedWindowContainer,
                     elwt: &async_winit::event_loop::EventLoopWindowTarget<async_winit::ThreadSafe>,
                     window: &Arc<egui_multiwin::async_winit::window::Window<async_winit::ThreadSafe>>,
                 ) {

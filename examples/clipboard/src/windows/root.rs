@@ -54,11 +54,11 @@ impl TrackedWindow for RootWindow {
 
     fn set_root(&mut self, _root: bool) {}
 
-    async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
+    async fn redraw(
         &mut self,
         c: &mut AppCommon,
         egui: &mut EguiGlow,
-        _window: &egui_multiwin::async_winit::window::Window<TS>,
+        _window: &egui_multiwin::async_winit::window::Window<egui_multiwin::async_winit::ThreadSafe>,
         clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
     ) -> RedrawResponse {
         let mut quit = false;

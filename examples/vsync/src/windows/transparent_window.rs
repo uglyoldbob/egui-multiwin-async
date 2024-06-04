@@ -8,6 +8,7 @@ use crate::egui_multiwin_dynamic::{
 use egui_multiwin::egui;
 use egui_multiwin::egui_glow_async::glow;
 use egui_multiwin::egui_glow_async::EguiGlow;
+use egui_multiwin::egui::containers::panel::AsyncClosure;
 
 use crate::AppCommon;
 
@@ -115,11 +116,11 @@ impl TrackedWindow for PopupWindow {
         (c.clicks & 1) == 0
     }
 
-    async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
+    async fn redraw(
         &mut self,
         c: &mut AppCommon,
         egui: &mut EguiGlow,
-        window: &egui_multiwin::async_winit::window::Window<TS>,
+        window: &egui_multiwin::async_winit::window::Window<egui_multiwin::async_winit::ThreadSafe>,
         _clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
     ) -> RedrawResponse {
         let quit = Arc::new(Mutex::new(false));
@@ -130,8 +131,7 @@ impl TrackedWindow for PopupWindow {
         frame.fill = egui::Color32::from_white_alpha(0);
         egui_multiwin::egui::CentralPanel::default()
             .frame(frame)
-            .show_async(&egui.egui_ctx, |ui| async move {
-                let mut ui = ui.lock();
+            .show_async(&egui.egui_ctx, |ui| AsyncClosure::new(async move {
                 if ui.button("Increment").clicked() {
                     c.clicks += 1;
                     window
@@ -150,7 +150,7 @@ impl TrackedWindow for PopupWindow {
                 if ui.button("Quit").clicked() {
                     *quit2.lock().unwrap() = true;
                 }
-            })
+            }))
             .await;
         let quit = *quit.lock().unwrap();
         RedrawResponse {

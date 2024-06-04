@@ -12,11 +12,11 @@ use glutin::surface::WindowSurface;
 use thiserror::Error;
 
 /// A holder of context and related items
-pub struct ContextHolder<T, TS: async_winit::ThreadSafety> {
+pub struct ContextHolder<T> {
     /// The context being held
     context: T,
     /// The window
-    pub window: Arc<async_winit::window::Window<TS>>,
+    pub window: Arc<async_winit::window::Window<async_winit::ThreadSafe>>,
     /// The window surface
     ws: glutin::surface::Surface<WindowSurface>,
     /// The display
@@ -25,11 +25,11 @@ pub struct ContextHolder<T, TS: async_winit::ThreadSafety> {
     options: TrackedWindowOptions,
 }
 
-impl<T, TS: async_winit::ThreadSafety + Clone> ContextHolder<T, TS> {
+impl<T> ContextHolder<T> {
     /// Create a new context holder
     pub fn new(
         context: T,
-        window: async_winit::window::Window<TS>,
+        window: async_winit::window::Window<async_winit::ThreadSafe>,
         ws: glutin::surface::Surface<WindowSurface>,
         display: glutin::display::Display,
         options: TrackedWindowOptions,
@@ -44,7 +44,7 @@ impl<T, TS: async_winit::ThreadSafety + Clone> ContextHolder<T, TS> {
     }
 
     /// Get the window handle
-    pub fn window(&self) -> Arc<async_winit::window::Window<TS>> {
+    pub fn window(&self) -> Arc<async_winit::window::Window<async_winit::ThreadSafe>> {
         self.window.clone()
     }
 
@@ -56,7 +56,7 @@ impl<T, TS: async_winit::ThreadSafety + Clone> ContextHolder<T, TS> {
     }
 }
 
-impl<TS: async_winit::ThreadSafety> ContextHolder<PossiblyCurrentContext, TS> {
+impl ContextHolder<PossiblyCurrentContext> {
     /// Call swap_buffers. linux targets have vsync specifically disabled because it causes problems with hidden windows.
     pub fn swap_buffers(&self) -> glutin::error::Result<()> {
         if self.options.vsync {
@@ -91,9 +91,9 @@ impl<TS: async_winit::ThreadSafety> ContextHolder<PossiblyCurrentContext, TS> {
     /// Make a possibly current context not-current
     pub fn make_not_current(
         self,
-    ) -> Result<ContextHolder<NotCurrentContext, TS>, glutin::error::Error> {
+    ) -> Result<ContextHolder<NotCurrentContext>, glutin::error::Error> {
         let c = self.context.make_not_current()?;
-        let s = ContextHolder::<NotCurrentContext, TS> {
+        let s = ContextHolder::<NotCurrentContext> {
             context: c,
             window: self.window,
             ws: self.ws,
@@ -104,13 +104,13 @@ impl<TS: async_winit::ThreadSafety> ContextHolder<PossiblyCurrentContext, TS> {
     }
 }
 
-impl<TS: async_winit::ThreadSafety> ContextHolder<NotCurrentContext, TS> {
+impl ContextHolder<NotCurrentContext> {
     /// Transforms a not current context into a possibly current context
     pub fn make_current(
         self,
-    ) -> Result<ContextHolder<PossiblyCurrentContext, TS>, glutin::error::Error> {
+    ) -> Result<ContextHolder<PossiblyCurrentContext>, glutin::error::Error> {
         let c = self.context.make_current(&self.ws)?;
-        let s = ContextHolder::<PossiblyCurrentContext, TS> {
+        let s = ContextHolder::<PossiblyCurrentContext> {
             context: c,
             window: self.window,
             ws: self.ws,

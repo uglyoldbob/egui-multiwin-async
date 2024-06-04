@@ -8,6 +8,7 @@ use crate::egui_multiwin_dynamic::{
 };
 use egui_multiwin::egui::FontId;
 use egui_multiwin::egui_glow_async::EguiGlow;
+use egui_multiwin::egui::containers::panel::AsyncClosure;
 
 use crate::AppCommon;
 
@@ -60,11 +61,11 @@ impl TrackedWindow for RootWindow {
 
     fn set_root(&mut self, _root: bool) {}
 
-    async fn redraw<TS: egui_multiwin::async_winit::ThreadSafety>(
+    async fn redraw(
         &mut self,
         c: &mut AppCommon,
         egui: &mut EguiGlow,
-        window: &egui_multiwin::async_winit::window::Window<TS>,
+        window: &egui_multiwin::async_winit::window::Window<egui_multiwin::async_winit::ThreadSafe>,
         _clipboard: Arc<Mutex<egui_multiwin::arboard::Clipboard>>,
     ) -> RedrawResponse {
         let mut quit = false;
@@ -108,8 +109,7 @@ impl TrackedWindow for RootWindow {
             })
             .await;
         egui_multiwin::egui::CentralPanel::default()
-            .show_async(egui_ctx, |ui| async move {
-                let mut ui = ui.lock();
+            .show_async(egui_ctx, |ui| AsyncClosure::new(async move {
                 ui.label(format!("The fps is {}", self.fps.unwrap()));
                 ui.heading(format!("number {}", c.clicks));
                 let t = egui_multiwin::egui::widget_text::RichText::new("Example custom font text");
@@ -133,7 +133,7 @@ impl TrackedWindow for RootWindow {
                         },
                     );
                 }
-            })
+            }))
             .await;
         RedrawResponse {
             quit,
